@@ -425,7 +425,7 @@ const FX = {
 
 // ============================== Art (dessins procéduraux en attendant les planches Gemini) ==============================
 const Art = (function () {
-  const c = ctx;
+  let c = ctx;
   const LW = 0.055;            // demi-épaisseur de contour, en unités de la boîte
   const PI = Math.PI, TAU = PI * 2;
   function fillOut(fill, lw) { c.lineJoin = 'round'; c.lineWidth = (lw || LW) * 2; c.strokeStyle = C.ink; c.stroke(); c.fillStyle = fill; c.fill(); }
@@ -937,7 +937,23 @@ const Art = (function () {
     c.restore();
   }
   // Silhouette (inconnu dans le bestiaire)
-  function silhouette(draw) { c.save(); c.filter = 'brightness(0)'; draw(); c.filter = 'none'; c.restore(); }
+  // Rendue une seule fois dans un canevas hors écran, puis noircie (ctx.filter est très lent sur mobile).
+  // draw(x, y) dessine la figure ancrée en (x, y) ; le cadre va de (x-ax, y-ay) sur w×h.
+  const silCache = {};
+  function silhouette(key, x, y, w, h, ax, ay, draw) {
+    const k = Math.min(3, view.dpr * view.s), id = key + '@' + k;
+    let oc = silCache[id];
+    if (!oc) {
+      oc = document.createElement('canvas'); oc.width = Math.ceil(w * k); oc.height = Math.ceil(h * k);
+      const oc2 = oc.getContext('2d'), prev = c;
+      oc2.setTransform(k, 0, 0, k, ax * k, ay * k);
+      c = oc2; try { draw(0, 0); } finally { c = prev; }
+      oc2.setTransform(1, 0, 0, 1, 0, 0); oc2.globalCompositeOperation = 'source-in';
+      oc2.fillStyle = '#000'; oc2.fillRect(0, 0, oc.width, oc.height);
+      silCache[id] = oc;
+    }
+    c.drawImage(oc, x - ax, y - ay, w, h);
+  }
 
   return { A, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
 })();
@@ -2626,14 +2642,14 @@ Scenes.bestiary = {
       });
     } else if (this.tab === 1) {
       D.recipes.forEach((r, i) => {
-        const y = top + 6 + i * rh - this.scroll;
+        const y = top + 6 + i * rh - this.scroll; if (y < top - rh || y > H) return;
         const known = S.owned.grim[i] || S.best.recipes[r.id];
         panel(8, y, 344, rh - 8, known ? C.panel : '#1e1628', 10);
         const parts = {}; let ai = 0;
         Object.keys(r.need).forEach(k => { for (let n = 0; n < r.need[k]; n++) { const sl = D.pieces[k].slot; const key = sl === 'arm' ? 'arm' + (ai++) : sl; parts[key] = { k, r: 0 }; } });
         if (!parts.torso) parts.torso = { k: 'p_ribs', r: 0 };
         if (known) Art.creature(parts, 52, y + 34, 20, { still: true, noGlow: true });
-        else Art.silhouette(() => Art.creature(parts, 52, y + 34, 20, { still: true, noGlow: true }));
+        else Art.silhouette('rc_' + r.id, 52, y + 34, 100, 90, 50, 50, (x0, y0) => Art.creature(parts, x0, y0, 20, { still: true, noGlow: true }));
         txt(known ? t('rc_' + r.id) : '???', 100, y + 18, 15, known ? C.legend : C.dim, 'left');
         if (known) {
           const need = Object.keys(r.need).map(k => (r.need[k] > 1 ? r.need[k] + '× ' : '') + t('pc_' + k)).join(', ');
@@ -2647,7 +2663,7 @@ Scenes.bestiary = {
         const y = top + 6 + i * rh - this.scroll; if (y < top - rh || y > H) return;
         const seen = S.best.heroes[h] !== undefined;
         panel(8, y, 344, rh - 8, C.panel, 10);
-        if (seen) Art.hero(h, 46, y + 60, 46, { t: time }); else Art.silhouette(() => Art.hero(h, 46, y + 60, 46, {}));
+        if (seen) Art.hero(h, 46, y + 60, 46, { t: time }); else Art.silhouette('h_' + h, 46, y + 60, 90, 80, 45, 72, (x0, y0) => Art.hero(h, x0, y0, 46, { t: 0 }));
         txt(seen ? t('hero_' + h) : '???', 90, y + 22, 15, i >= 6 ? C.legend : C.text, 'left');
         if (seen) { txtWrap(t('herod_' + h), 90, y + 42, 250, 10, C.dim, 'left', 12); txt(t('kills_n', { n: S.best.heroes[h] }), 342, y + 22, 11, C.toxic, 'right'); }
       });
