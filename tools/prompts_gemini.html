@@ -1,0 +1,91 @@
+<title>Planches Gemini du Nécromancien</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,700&display=swap">
+<style>
+/* Grimoire sombre : une colonne de cartes-parchemins, bouton Copier sur chacune */
+:root {
+  color-scheme: dark;
+  --bg: #120a1b; --card: #1f1430; --line: #3a2a52; --ink: #efe6ff; --dim: #a898c4; --toxic: #8cff5a; --bone: #ece0c3;
+  --display: "Grenze Gotisch", "Palatino Linotype", Georgia, serif;
+  --body: "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+}
+html, body { background: var(--bg); color: var(--ink); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+main { max-width: 680px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: clamp(30px, 8vw, 44px); line-height: 1.05; margin: 0; color: var(--bone); text-wrap: balance; }
+h1 span { color: var(--toxic); }
+.intro { color: var(--dim); margin: 0; }
+.how { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; }
+.how b { color: var(--bone); }
+h2 { font-family: var(--display); font-weight: 600; font-size: 24px; margin: 14px 0 0; color: var(--bone); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.head h3 { margin: 0; font-size: 16px; color: var(--ink); }
+.tag { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; text-transform: uppercase; }
+.prompt { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 14px; color: var(--bone); background: rgba(0,0,0,0.25); border-radius: 8px; padding: 10px 12px; }
+.order { font-size: 13px; color: var(--dim); margin: 0; }
+button { justify-self: start; font: 700 14px var(--body); color: #10220a; background: var(--toxic); border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--bone); outline-offset: 2px; }
+button.done { background: var(--bone); }
+</style>
+
+<main>
+  <h1>Planches Gemini du <span>Nécromancien</span></h1>
+  <p class="intro">Les prompts d'images et de musiques du jeu, prêts à copier. Chaque planche remplace une famille de dessins provisoires.</p>
+  <div class="how">
+    <div><b>1.</b> Copie un prompt et colle-le dans Gemini.</div>
+    <div><b>2.</b> Si le résultat te plaît, enregistre l'image (ou la musique).</div>
+    <div><b>3.</b> Dépose-la dans le fil du jeu sur Claude en disant de quelle planche il s'agit. Je la découpe et je l'intègre.</div>
+    <div>Garde l'ordre des éléments demandé dans le prompt : je les découpe dans l'ordre de lecture.</div>
+  </div>
+  <div id="list"></div>
+</main>
+
+<script>
+const STYLE = "Style cartoon gothique pour un jeu mobile, contours noirs épais, couleurs franches avec léger ombrage, palette os ivoire, violet et vert toxique, ton mi-macabre mi-humoristique (pas de gore). Fond blanc pur et uni, sans ombre portée, sans halo, sans texte. Éléments bien séparés par beaucoup d'espace, en grille régulière, tous à la même échelle. ";
+const GROUPS = [
+  ["Pièces de créatures", [
+    ["Planche 1 · Têtes (6)", "6 têtes", STYLE + "Planche de 6 têtes vues de face, en 2 lignes de 3 : 1) un crâne humain simple ; 2) un crâne coiffé d'un casque de chevalier en acier avec un petit plumet rouge ; 3) une tête encapuchonnée violette dont on ne voit que deux yeux verts brillants ; 4) un crâne gravé de runes cyan lumineuses ; 5) un crâne avec une auréole dorée au-dessus ; 6) une tête de gargouille en pierre grise avec cornes et crocs.", "crâne, casque, capuche, crâne runique, auréole, gargouille"],
+    ["Planche 2 · Torses (4)", "4 torses", STYLE + "Planche de 4 torses vus de face, sans tête ni bras, en 2 lignes de 2 : 1) une cage thoracique en os avec colonne vertébrale ; 2) un plastron d'armure lourde en acier avec épaulières rondes ; 3) une armure sacrée blanche et or avec un soleil gravé ; 4) un torse massif de golem en pierre avec une rune verte lumineuse au centre.", "cage, plastron, armure sacrée, golem"],
+    ["Planche 3 · Bras (6)", "6 bras", STYLE + "Planche de 6 bras isolés, chacun bien vertical, épaule en haut et main en bas, en 2 lignes de 3 : 1) un bras de squelette en os ; 2) un bras en armure d'acier avec poing fermé ; 3) un bras en os terminé par une lame courbe ; 4) un bras en os tenant un orbe magique violet ; 5) un bras en armure argentée tenant une épée pointée vers le bas ; 6) un gros bras de golem en pierre avec un poing massif.", "os, acier, lame, orbe, épée, golem"],
+    ["Planche 4 · Jambes (4)", "4 paires de jambes", STYLE + "Planche de 4 paires de jambes vues de face, bassin en haut et pieds en bas, chaque paire d'un seul bloc, en 2 lignes de 2 : 1) des jambes de squelette avec bassin en os ; 2) des jambières d'acier avec bottes ; 3) des jambes fines et agiles à genoux inversés, avec bandages violets ; 4) deux piliers de pierre de golem.", "os, acier, agiles, golem"],
+    ["Planche 5 · Dos et cœurs (6)", "6 éléments", STYLE + "Planche de 6 éléments en 2 lignes de 3 : 1) une paire d'ailes de chauve-souris violettes déployées, d'un seul tenant, vue de dos ; 2) une cape d'ombre déchirée violet sombre ; 3) un cœur pourri rouge sombre recousu, avec une goutte verte ; 4) un cœur sacré rose lumineux surmonté d'une petite flamme dorée ; 5) une gemme d'âme verte en losange ; 6) une paire d'ailes bleues bordées d'or, d'un seul tenant.", "ailes, cape, cœur pourri, cœur sacré, gemme, ailes d'or"],
+    ["Planche 6 · Pièces légendaires (5)", "5 légendaires", STYLE + "Planche de 5 pièces légendaires dorées et brillantes, en 2 lignes (3 puis 2) : 1) un bras vertical en armure dorée avec un petit bouclier rond rouge, épaule en haut ; 2) une paire de jambes agiles noires et or, bassin en haut ; 3) un cœur doré rayonnant ; 4) un crâne portant une couronne d'or sertie de rubis ; 5) un torse de titan : cage thoracique géante renforcée de plaques d'acier et d'or.", "bras du Capitaine, jambes de la Reine, cœur du Grand Prêtre, crâne couronné, torse du Titan"]
+  ]],
+  ["Personnages", [
+    ["Planche 7 · Héros (6)", "6 héros", STYLE + "Planche de 6 petits héros médiévaux mignons et ridicules, en pied, tournés vers la droite, même taille, en 2 lignes de 3 : 1) un paysan avec une fourche et un chapeau de paille ; 2) un guerrier casqué avec épée et bouclier rond ; 3) un voleur en capuche verte avec une dague ; 4) un mage en robe bleue avec chapeau pointu et bâton ; 5) un prêtre en robe blanche avec mitre et bâton doré ; 6) un paladin en armure argentée avec une grande épée.", "paysan, guerrier, voleur, mage, prêtre, paladin"],
+    ["Planche 8 · Boss (5)", "5 boss", STYLE + "Planche de 5 boss héroïques et un peu ridicules, en pied, tournés vers la droite, même taille, en 2 lignes (3 puis 2) : 1) un capitaine de la garde en armure dorée avec cape rouge ; 2) un archimage en robe violette avec un immense chapeau ; 3) une reine des voleurs avec couronne et deux dagues, tenue vert sombre ; 4) un grand prêtre en robe blanche et or avec une très haute mitre ; 5) un archange gardien en armure blanche et or avec de grandes ailes blanches et une auréole.", "capitaine, archimage, reine, grand prêtre, archange"]
+  ]],
+  ["Crypte et interface", [
+    ["Planche 9 · Pièges (4)", "4 pièges", STYLE + "Planche de 4 pièges de crypte vus de profil, posés au sol, en 2 lignes de 2 : 1) une plaque de pointes en acier sorties du sol ; 2) une trappe en bois dans le sol ; 3) un brasero en fer avec une flamme verte ; 4) un cercueil en bois debout, prêt à bondir.", "pointes, trappe, brasero, cercueil"],
+    ["Planche 10 · Fioles (6)", "6 fioles", STYLE + "Planche de 6 fioles rondes en verre avec bouchon de liège, même forme, en 2 lignes de 3, remplies d'un liquide : 1) rouge sang ; 2) vert poison ; 3) bleu glace ; 4) orange feu ; 5) jaune foudre ; 6) blanc nacré (âme).", "sang, poison, glace, feu, foudre, âme"],
+    ["Planche 11 · Icônes (6)", "6 icônes", STYLE + "Planche de 6 icônes d'interface en 2 lignes de 3 : 1) une flamme d'âme verte ; 2) un crâne (boutique) ; 3) un grimoire violet fermé ; 4) un engrenage ; 5) un haut-parleur ; 6) un drapeau mi-bleu mi-rouge.", "âme, boutique, grimoire, réglages, son, langue"],
+    ["Fond · Mur de crypte", "1 image", "Style cartoon gothique pour un jeu mobile, contours épais, palette violet sombre et vert toxique. Mur intérieur de crypte vu de face, grosses pierres sombres violacées, un peu de mousse, toiles d'araignée, sans sol, sans personnage, sans texte. Format paysage très large (3:1), ambiance sombre pour rester lisible derrière les personnages.", "fond des 3 salles"],
+    ["Fond · Table d'autel", "1 image", "Style cartoon gothique pour un jeu mobile, contours épais, palette violet sombre, os et vert toxique. Vue de dessus d'une dalle d'autel en pierre gravée de cercles rituels, chaînes et bougies noires aux coins, centre vide et dégagé, sans personnage, sans texte. Format carré, ambiance sombre.", "fond de l'atelier"]
+  ]],
+  ["Musiques", [
+    ["Musique · Crypte", "boucle", "Musique d'ambiance pour un jeu mobile gothique et humoristique : crypte souterraine, calme et inquiétante, orgue grave, chœurs lointains, cloches, tempo lent (70 bpm). Boucle instrumentale de 60 secondes qui se répète sans coupure.", "music_crypt"],
+    ["Musique · Atelier", "boucle", "Musique d'ambiance pour un jeu mobile gothique et humoristique : laboratoire de nécromancien, orgue lent et malicieux, goutte-à-goutte, petites percussions d'os, un peu comique. Boucle instrumentale de 60 secondes qui se répète sans coupure.", "music_atelier"],
+    ["Musique · Titan", "épique", "Musique épique pour la fin d'un jeu mobile gothique : un titan d'os marche sur une cathédrale, grosses percussions, chœurs puissants, orgue triomphant, tempo lourd. Instrumental, 60 secondes, en boucle.", "music_titan"]
+  ]]
+];
+const list = document.getElementById('list');
+GROUPS.forEach(([g, items]) => {
+  const h = document.createElement('h2'); h.textContent = g; list.appendChild(h);
+  items.forEach(([title, tag, text, order]) => {
+    const card = document.createElement('section'); card.className = 'card';
+    const head = document.createElement('div'); head.className = 'head';
+    const h3 = document.createElement('h3'); h3.textContent = title;
+    const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = tag;
+    head.append(h3, tg);
+    const pre = document.createElement('p'); pre.className = 'prompt'; pre.textContent = text;
+    const ord = document.createElement('p'); ord.className = 'order'; ord.textContent = 'Ordre attendu : ' + order;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Copier';
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(text).then(() => { btn.textContent = 'Copié'; btn.classList.add('done'); })
+        .catch(() => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Texte sélectionné'; });
+    });
+    card.append(head, pre, ord, btn); list.appendChild(card);
+  });
+});
+</script>
