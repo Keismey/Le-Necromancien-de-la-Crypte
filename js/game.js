@@ -1169,7 +1169,7 @@ Scenes.atelier = {
   toInv(p) { if (this.titan) { p.q = null; S.titanInv.push(p); } else Logic.invAdd(p); },
   grind(p) {
     if (this.titan) { this.toInv(p); return; }
-    S.souls += D.grindSouls[p.r]; Sfx.play('grind'); vib(30);
+    Logic.invRemove(p); S.souls += D.grindSouls[p.r]; Sfx.play('grind'); vib(30);
     FX.spark(BIN.x, BIN.y, C.bone, 14, 100); FX.text(BIN.x + 10, BIN.y - 30, '+' + D.grindSouls[p.r], C.toxic, 16);
     Save.save();
   },
