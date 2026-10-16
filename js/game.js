@@ -1087,17 +1087,25 @@ Scenes.atelier = {
     arg = arg || {};
     this.from = arg.from || 'map'; this.titan = !!arg.titan;
     this.tab = 'all'; this.scroll = 0; this.info = null; this.drag = null; this.press = null; this.sew = null;
-    this.wake = null; this.card = null; this.lever = 0; this.leverDrag = false; this.leverAuto = false; this.confirm = 0;
+    this.wake = null; this.card = null; this.lever = 0; this.leverDrag = false; this.leverAuto = false; this.confirm = -1e9;
     this.pop = {}; this.vial = null; this.flash = {};
     if (!S.draft) S.draft = { parts: {} };
     if (this.titan) this.setupTitan();
     this.target = null; this.active = null;
     if (arg.creature) this.select(arg.creature);
+    else if (!this.titan) this.fullRoster();
     this.makeButtons();
     Sfx.Music.set(this.titan ? 'titan' : 'atelier');
     this.tutoHint();
   },
   exit() { this.cleanupUnsewn(); Save.save(); },
+  // crypte pleine : pas de nouvel assemblage, on édite une créature existante
+  fullRoster() {
+    if (S.creatures.length < D.maxCreatures || this.target) return;
+    for (const k in S.draft.parts) Logic.invAdd(S.draft.parts[k]);
+    S.draft = { parts: {} };
+    this.select(S.creatures[S.creatures.length - 1]);
+  },
   setupTitan() {
     if (!S.titanDraft) {
       S.titanDraft = { parts: {} };
@@ -1124,7 +1132,7 @@ Scenes.atelier = {
   },
   select(cr) {
     this.cleanupUnsewn();
-    this.target = cr; this.info = null; this.sew = null; this.active = null; this.confirm = 0;
+    this.target = cr; this.info = null; this.sew = null; this.active = null; this.confirm = -1e9;
   },
   cleanupUnsewn() {
     if (!this.target) return;
@@ -1170,6 +1178,7 @@ Scenes.atelier = {
   grind(p) {
     if (this.titan) { this.toInv(p); return; }
     Logic.invRemove(p); S.souls += D.grindSouls[p.r]; Sfx.play('grind'); vib(30);
+    if (!S.hints.grinder) { S.hints.grinder = 1; Toast.show(t('hint_grinder')); }
     FX.spark(BIN.x, BIN.y, C.bone, 14, 100); FX.text(BIN.x + 10, BIN.y - 30, '+' + D.grindSouls[p.r], C.toxic, 16);
     Save.save();
   },
@@ -1180,11 +1189,13 @@ Scenes.atelier = {
       if (P[slot]) return;
       let best = null;
       inv.forEach(p => { if (Logic.fits(p, slot) && (!best || Logic.score(p) > Logic.score(best))) best = p; });
-      if (best) { inv.splice(inv.indexOf(best), 1); best.q = slot === 'torso' ? 1 : D.quality.good; P[slot] = best; this.pop[slot] = time + n * 0.08; n++; }
+      if (best) { inv.splice(inv.indexOf(best), 1); best.q = slot === 'torso' ? 1 : null; P[slot] = best; this.pop[slot] = time + n * 0.08; n++; }
     });
-    // pièces posées non cousues : couture automatique (qualité « bon »)
-    this.seamSlots().forEach(s => { P[s].q = D.quality.good; n++; });
-    if (n) { Sfx.play('bone'); Toast.show(t('auto_done')); } else Toast.show(t('auto_none'));
+    // la couture reste au joueur : on active la première jointure à coudre
+    const seams = this.seamSlots();
+    if (seams.length && !this.active) this.active = seams[0];
+    if (n) { Sfx.play('bone'); Toast.show(t(seams.length ? 'auto_sew' : 'auto_done')); }
+    else Toast.show(t(seams.length ? 'auto_sew' : 'auto_none'));
     Save.save();
   },
   dismantle() {
@@ -1223,6 +1234,7 @@ Scenes.atelier = {
   closeCard() {
     this.card = null; this.wake = null; this.lever = 0;
     if (this.titan) return;
+    this.fullRoster();
     if (S.tuto === 6) this.tutoHint();
   },
   tutoHint() {
@@ -1276,6 +1288,8 @@ Scenes.atelier = {
     if (!this.target && Math.abs(p.x - LEVER.x) < 26 && p.y > LEVER.y0 - 30 && p.y < LEVER.y1 + 20) { this.leverDrag = true; this.press = { kind: 'lever', x: p.x, y: p.y }; return; }
     // roster
     if (!this.titan && p.y >= ROSTER_Y && p.y <= ROSTER_Y + 50) { this.press = { kind: 'roster', x: p.x, y: p.y }; return; }
+    // broyeur : un appui ouvre le broyage en masse
+    if (!this.titan && S.tuto >= 99 && dist(p.x, p.y, BIN.x, BIN.y) < BIN.r + 4) { this.press = { kind: 'bin', x: p.x, y: p.y }; return; }
     // pièce posée
     const ps = this.hitPlaced(p);
     if (ps) { this.press = { kind: 'slot', slot: ps, x: p.x, y: p.y }; return; }
@@ -1344,11 +1358,12 @@ Scenes.atelier = {
     if (this.drag) { this.drop(p); return; }
     const pr = this.press; this.press = null; if (!pr) return;
     if (pr.kind === 'inv' && !pr.scrolling && pr.piece) { this.info = { p: pr.piece, t: time }; Sfx.play('tap'); }
+    if (pr.kind === 'bin') { if (dist(p.x, p.y, BIN.x, BIN.y) < BIN.r + 10) { Sfx.play('tap'); go('grinder', { from: this.from }); } return; }
     if (pr.kind === 'slot') { const pc = this.parts[pr.slot]; if (pc) { this.info = { p: pc, t: time }; if (pc.q === null) this.active = pr.slot; } }
     if (pr.kind === 'roster') {
       const i = Math.floor((p.x - 6) / 50);
       if (i >= 0 && i < S.creatures.length) { this.select(S.creatures[i] === this.target ? null : S.creatures[i]); Sfx.play('tap'); }
-      else if (i === S.creatures.length) { this.select(null); Sfx.play('tap'); }
+      else if (i === S.creatures.length && i < D.maxCreatures) { this.select(null); Sfx.play('tap'); }
     }
   },
   drop(p) {
@@ -1387,7 +1402,7 @@ Scenes.atelier = {
     const pc = this.parts[s.slot]; if (!pc) return;
     pc.q = q; this.active = null;
     Sfx.play(key); vib(key === 'bad' ? [60, 40, 60] : 30);
-    FX.text(mid[0], mid[1] - 22, t('sew_' + key), key === 'perfect' ? C.gold : key === 'good' ? C.toxic : '#ff7a7a', key === 'perfect' ? 19 : 16);
+    FX.text(mid[0], mid[1] - 22, t('sew_' + key) + (q !== 1 ? ' ' + (q > 1 ? '+' : '') + Math.round((q - 1) * 100) + '%' : ''), key === 'perfect' ? C.gold : key === 'good' ? C.toxic : '#ff7a7a', key === 'perfect' ? 19 : 16);
     FX.spark(mid[0], mid[1], key === 'perfect' ? C.gold : key === 'good' ? C.bone : C.red, key === 'perfect' ? 26 : 12, 130);
     if (key === 'perfect') this.flash[s.slot] = time;
     if (S.tuto === 4) { S.tuto = 5; this.tutoHint(); }
@@ -1467,7 +1482,7 @@ Scenes.atelier = {
     if (!this.titan) {
       const hot = this.drag && dist(this.drag.x, this.drag.y - 26, BIN.x, BIN.y) < BIN.r + 14;
       ctx.globalAlpha = S.tuto >= 99 ? 1 : 0.35;
-      Art.icon('bin', BIN.x, BIN.y, hot ? 52 : 42); txt(t('grinder'), BIN.x + 2, BIN.y - 27, 10, C.dim);
+      Art.icon('bin', BIN.x, BIN.y, hot ? 52 : 42); txt(t('grinder'), BIN.x + 2, BIN.y - 27, 10, S.tuto >= 99 && !this.titan ? C.text : C.dim);
       ctx.globalAlpha = 1;
     }
     if (!this.target) this.drawLever();
@@ -1509,7 +1524,7 @@ Scenes.atelier = {
       const st = Logic.stats(cr.parts), hp = Math.max(0, st.hp - (cr.dmg || 0));
       ctx.fillStyle = '#300'; ctx.fillRect(x + 5, y + 39, 36, 4); ctx.fillStyle = cr.fallen ? '#555' : hp < st.hp ? '#e0b030' : C.toxic; ctx.fillRect(x + 5, y + 39, 36 * hp / st.hp, 4);
     });
-    if (S.creatures.length < D.maxCreatures || !this.target) {
+    if (S.creatures.length < D.maxCreatures) {
       const x = 6 + S.creatures.length * 50, sel = !this.target;
       panel(x, y, 46, 46, sel ? C.violet : C.panel, 8); txt('+', x + 23, y + 22, 26, sel ? C.toxic : C.dim);
     }
@@ -1799,7 +1814,7 @@ Scenes.crypt = {
   },
   power() { // multiplicateurs de difficulté
     const n = this.run.endless ? 10 + this.run.wave * 0.6 : this.run.night;
-    return { hp: 1 + D.heroHpPerNight * (n - 1), dmg: 1 + D.heroDmgPerNight * (n - 1) };
+    const k = n - 1; return { hp: 1 + D.heroHp[0] * k + D.heroHp[1] * k * k, dmg: 1 + D.heroDmg[0] * k + D.heroDmg[1] * k * k };
   },
   startWave(tuto) {
     if (this.phase !== 'prep' && !tuto) return;
@@ -1812,7 +1827,7 @@ Scenes.crypt = {
     this.queue = [];
     if (tuto) this.queue.push('peasant');
     else {
-      const count = this.run.endless ? 10 + this.run.wave * 2 : 4 + 2 * n;
+      const count = this.run.endless ? 10 + this.run.wave * 2 : Math.round(D.waveCount[0] + D.waveCount[1] * n + D.waveCount[2] * n * n);
       const comp = this.composition();
       for (let i = 0; i < count; i++) this.queue.push(weighted(comp));
       const last = this.run.wave === this.run.waves - 1;
@@ -2692,10 +2707,111 @@ Scenes.bestiary = {
   up(p) { if (UI.pressed) UI.up([this.back], p); this.press = null; }
 };
 
+// ============================== Scène : Broyeur (broyage en masse) ==============================
+Scenes.grinder = {
+  enter(arg) {
+    this.from = (arg && arg.from) || 'map';
+    this.slot = 'all'; this.rar = [true, true, false]; this.sel = new Set(); this.scroll = 0; this.press = null; this.confirm = -1e9;
+    this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('atelier', { from: this.from }) });
+    this.bAll = UI.btn({ x: 8, y: 538, w: 84, h: 38, label: t('gr_all'), size: 12, style: 'dark', on: () => { const l = this.list(); const allOn = l.every(p => this.sel.has(p.id)); l.forEach(p => allOn ? this.sel.delete(p.id) : this.sel.add(p.id)); } });
+    this.bDup = UI.btn({ x: 98, y: 538, w: 108, h: 38, label: t('gr_dups'), size: 12, style: 'dark', on: () => this.selectDups() });
+    this.bNone = UI.btn({ x: 212, y: 538, w: 140, h: 38, label: t('gr_none'), size: 12, style: 'dark', on: () => { this.sel.clear(); this.confirm = -1e9; } });
+    this.bGo = UI.btn({ x: 8, y: 584, w: 344, h: 50, label: '', size: 15, style: 'red', on: () => this.grindSel() });
+    this.btns = [this.back, this.bAll, this.bDup, this.bNone, this.bGo];
+  },
+  update() {},
+  list() { return Logic.invSorted(this.slot).filter(p => this.rar[p.r]); },
+  chosen() { return S.inv.filter(p => this.sel.has(p.id)); },
+  // doublons : pour chaque type de pièce, garde le meilleur exemplaire (rareté, puis fluide) et sélectionne les autres
+  selectDups() {
+    const by = {};
+    this.list().forEach(p => (by[p.k] = by[p.k] || []).push(p));
+    let n = 0;
+    Object.values(by).forEach(arr => {
+      arr.sort((a, b) => (b.r - a.r) || ((b.fl ? b.fl.d : 0) - (a.fl ? a.fl.d : 0)));
+      arr.slice(1).forEach(p => { this.sel.add(p.id); n++; });
+    });
+    if (!n) Toast.show(t('gr_no_dups'));
+  },
+  grindSel() {
+    const ch = this.chosen(); if (!ch.length) return;
+    if (ch.some(p => p.r >= 1) && time - this.confirm > 3) { this.confirm = time; Toast.show(t('gr_confirm'), C.legend); return; }
+    let g = 0; ch.forEach(p => { g += D.grindSouls[p.r]; Logic.invRemove(p); });
+    S.souls += g; this.sel.clear(); this.confirm = -1e9;
+    Sfx.play('grind'); vib(40); FX.spark(W / 2, 600, C.bone, 30, 160); FX.text(W / 2, 560, '+' + g, C.toxic, 22);
+    this.scroll = clamp(this.scroll, 0, this.maxScroll());
+    Save.save();
+  },
+  GRID: { x: 8, y: 132, cols: 6, cell: 57, h: 396 },
+  maxScroll() { const G = this.GRID; return Math.max(0, Math.ceil(this.list().length / G.cols) * G.cell - G.h); },
+  draw() {
+    bgNight('#1a1028', '#0c0714');
+    const G = this.GRID, list = this.list();
+    // grille
+    ctx.save(); ctx.beginPath(); ctx.rect(0, G.y, W, G.h); ctx.clip();
+    if (!list.length) txt(t('drawer_empty'), W / 2, G.y + 60, 13, C.dim);
+    list.forEach((p, i) => {
+      const x = G.x + (i % G.cols) * G.cell, y = G.y + Math.floor(i / G.cols) * G.cell - this.scroll;
+      if (y < G.y - G.cell || y > G.y + G.h) return;
+      const on = this.sel.has(p.id);
+      rr(x + 2, y + 2, G.cell - 4, G.cell - 4, 8); ctx.fillStyle = on ? 'rgba(195,58,74,0.45)' : 'rgba(0,0,0,0.3)'; ctx.fill();
+      ctx.lineWidth = on ? 3 : 2; ctx.strokeStyle = on ? '#ff6a7a' : [C.stoneD, C.rare, C.legend][p.r]; ctx.stroke();
+      Art.piece(p, x + G.cell / 2, y + G.cell / 2, 40, { noGlow: true });
+      if (p.fl) Art.vial(p.fl.t, x + G.cell - 11, y + G.cell - 13, 14);
+      if (on) Art.icon('check', x + 14, y + 14, 16);
+    });
+    ctx.restore();
+    const ms = this.maxScroll();
+    if (ms > 0) { ctx.fillStyle = 'rgba(255,255,255,0.25)'; const bh = G.h * G.h / (G.h + ms); ctx.fillRect(W - 5, G.y + (G.h - bh) * this.scroll / ms, 3, bh); }
+    // en-tête et filtres
+    ctx.fillStyle = 'rgba(13,7,22,0.94)'; ctx.fillRect(0, 0, W, G.y - 2);
+    txt(t('grinder'), 180, 25, 19, C.text);
+    Art.icon('soul', 312, 25, 22); txt(String(S.souls), 326, 26, 14, C.toxic, 'left');
+    const tw = (W - 16) / TABS.length;
+    TABS.forEach((tb, i) => {
+      const on = this.slot === tb; rr(8 + i * tw + 1, 52, tw - 2, 32, 8); ctx.fillStyle = on ? C.violet : C.panel; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+      txt(tb === 'all' ? t('tab_all') : t('slot_' + tb), 8 + i * tw + tw / 2, 68, 10, on ? C.text : C.dim, 'center', { stroke: false });
+    });
+    [0, 1, 2].forEach(r => {
+      const on = this.rar[r], x = 8 + r * 116; rr(x, 90, 112, 34, 8);
+      ctx.fillStyle = on ? 'rgba(80,60,110,0.9)' : C.panel; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = on ? [C.bone, C.rare, C.legend][r] : C.ink; ctx.stroke();
+      txt(t('rar_' + r), x + 56, 107, 12, on ? [C.text, C.rare, C.legend][r] : C.dim);
+    });
+    // barre d'actions
+    ctx.fillStyle = 'rgba(13,7,22,0.94)'; ctx.fillRect(0, G.y + G.h + 2, W, H - G.y - G.h);
+    const ch = this.chosen(), g = ch.reduce((a, p) => a + D.grindSouls[p.r], 0);
+    this.bGo.off = !ch.length;
+    this.bGo.label = ch.length ? (time - this.confirm < 3 ? t('sure') : t('gr_go', { n: ch.length, g })) : t('gr_pick');
+    UI.draw(this.btns);
+  },
+  down(p) {
+    if (UI.down(this.btns, p)) return;
+    if (p.y >= 52 && p.y < 84) { const i = clamp(Math.floor((p.x - 8) / ((W - 16) / TABS.length)), 0, TABS.length - 1); this.slot = TABS[i]; this.scroll = 0; Sfx.play('tap'); return; }
+    if (p.y >= 90 && p.y < 124) { const r = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.rar[r] = !this.rar[r]; this.scroll = 0; Sfx.play('tap'); return; }
+    const G = this.GRID;
+    if (p.y >= G.y && p.y < G.y + G.h) this.press = { x: p.x, y: p.y, s0: this.scroll, moved: false };
+  },
+  move(p) {
+    if (!this.press) return;
+    if (Math.abs(p.y - this.press.y) > 8) this.press.moved = true;
+    if (this.press.moved) this.scroll = clamp(this.press.s0 - (p.y - this.press.y), 0, this.maxScroll());
+  },
+  up(p) {
+    if (UI.pressed) { UI.up(this.btns, p); return; }
+    const pr = this.press; this.press = null;
+    if (!pr || pr.moved) return;
+    const G = this.GRID, col = Math.floor((p.x - G.x) / G.cell), row = Math.floor((p.y - G.y + this.scroll) / G.cell);
+    if (col < 0 || col >= G.cols) return;
+    const pc = this.list()[row * G.cols + col]; if (!pc) return;
+    if (this.sel.has(pc.id)) this.sel.delete(pc.id); else this.sel.add(pc.id);
+    this.confirm = -1e9; Sfx.play('tap');
+  }
+};
+
 // ============================== Scène : Réglages ==============================
 Scenes.settings = {
   enter(arg) {
-    this.backTo = (arg && arg.back) || 'menu'; this.confirm = 0;
+    this.backTo = (arg && arg.back) || 'menu'; this.confirm = -1e9;
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go(this.backTo, { resume: true }) });
     this.rows = [
       { k: 'lang', icon: 'flag' }, { k: 'sound', icon: 'sound' }, { k: 'music', icon: 'music' }, { k: 'vib', icon: 'vib' },

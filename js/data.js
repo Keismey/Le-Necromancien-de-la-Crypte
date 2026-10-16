@@ -2,7 +2,7 @@
    Tout ce qui se règle (stats, coûts, vagues) est ici, séparé du code. */
 window.GAME_DATA = {
   rarityMult: [1, 2.5, 5],          // commune, rare, légendaire
-  quality: { bad: 0.7, good: 1.0, perfect: 1.2 },
+  quality: { bad: 0.75, good: 1.0, perfect: 1.25 },   // multiplie les stats de la pièce cousue
   fragileLoss: 0.15,                // lien fragile : chance de perdre le membre par coup subi
   creatureBase: { hp: 20, str: 2, mag: 0, spd: 0, def: 0 },
   maxCreatures: 6,
@@ -83,7 +83,9 @@ window.GAME_DATA = {
     priest:  { hp: 45,  str: 0,  mag: 4, def: 10, move: 28, rate: 2.2, range: 80, heal: 6 },
     paladin: { hp: 100, str: 8,  mag: 0, def: 35, move: 24, rate: 1.7, range: 20, darkResist: 0.5 }
   },
-  heroHpPerNight: 0.16, heroDmgPerNight: 0.1,
+  // multiplicateurs des héros par nuit n : 1 + a·(n-1) + b·(n-1)² (la courbe se raidit en fin de partie)
+  heroHp: [0.12, 0.08], heroDmg: [0.07, 0.045],
+  waveCount: [4, 2, 0.15],          // héros par vague : base + a·n + b·n²
   elite: { hpMul: 3, dmgMul: 1.5, size: 1.3 },
 
   bosses: {
@@ -98,7 +100,7 @@ window.GAME_DATA = {
   nights: [
     { peasant: 8, warrior: 2 },
     { peasant: 6, warrior: 4 },
-    { peasant: 4, warrior: 5, rogue: 1 },
+    { peasant: 5, warrior: 4, rogue: 1 },
     { peasant: 2, warrior: 4, rogue: 3, mage: 1 },
     { warrior: 4, rogue: 3, mage: 3 },
     { warrior: 3, rogue: 3, mage: 3, priest: 1 },
