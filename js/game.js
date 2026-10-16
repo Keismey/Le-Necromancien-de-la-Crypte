@@ -1717,6 +1717,9 @@ for (let i = 1; i < PATH.length; i++) {
 const TRAP_X = [172, 186, 160];
 const POST_X = [[132, 250], [232, 112], [118, 232]];
 const ROOM_DIR = [1, -1, 1];
+// recul minimal : un héros repoussé reste à portée des créatures (bord gauche de l'étage 1 à x≈26)
+const PUSH_MIN_S = 40;
+function pushBack(h, d) { h.s = Math.max(Math.min(h.s, PUSH_MIN_S), h.s - d); const p = pathPos(h.s); h.x = p.x; h.y = p.y; h.room = p.room; }
 function pathPos(s) {
   for (const g of SEGS) if (s <= g.s0 + g.l) { const k = (s - g.s0) / g.l; return { x: lerp(g.a[0], g.b[0], k), y: lerp(g.a[1], g.b[1], k), room: g.room }; }
   const g = SEGS[SEGS.length - 1]; return { x: g.b[0], y: g.b[1], room: g.room };
@@ -1922,7 +1925,7 @@ Scenes.crypt = {
     if (fx.fire) h.burn = { dps: 1.5 * fx.fire + u.st.str * 0.05, t: 3 };
     if (fx.ice) { h.slow = 2; h.slowK = Math.min(0.6, 0.25 * fx.ice); }
     if (u.st.stun && Math.random() < u.st.stun) { h.stun = Math.max(h.stun, 1); FX.text(h.x, h.y - h.size - 18, '★', C.gold, 14); }
-    if (u.st.push) { h.s = Math.max(0, h.s - 18); }
+    if (u.st.push) pushBack(h, 18);
     if (u.st.splash) this.heroes.forEach(o => { if (o !== h && !o.dead && o.room === h.room && Math.abs(o.x - h.x) < 50) this.hitHero(o, d * u.st.splash, u); });
     if (fx.lightning) {
       const others = this.heroes.filter(o => o !== h && !o.dead && o.room === h.room && Math.abs(o.x - h.x) < 90).slice(0, fx.lightning);
@@ -2010,6 +2013,7 @@ Scenes.crypt = {
       const taunt = units.find(u => u.st.taunt && Math.abs(u.x - h.x) < 120);
       if (h.range > 40) { let bd = 1e9; units.forEach(u => { const d = Math.abs(u.x - h.x); if (d <= h.range && d < bd) { bd = d; tg = u; } }); if (taunt && Math.abs(taunt.x - h.x) <= h.range) tg = taunt; }
       else { tg = (taunt && (taunt.x - h.x) * dir > -12 && (taunt.x - h.x) * dir < h.range + 10) ? taunt : units.find(u => (u.x - h.x) * dir > -12 && (u.x - h.x) * dir < h.range + 10); }
+      if (h.room === 0 && h.x < 24) tg = null; // à l'entrée, hors de portée des créatures : il avance d'abord
       if (tg) {
         h.cd -= dt;
         if (h.cd <= 0) {
@@ -2057,7 +2061,7 @@ Scenes.crypt = {
       if (h.disarm) { h.trapHits++; if (h.trapHits % h.disarm === 0) { disarmed = true; FX.text(h.x, h.y - h.size - 14, t('disarmed'), '#ffd27a', 13); return; } }
       if (type === 'spikes') { if (h.ignoreLight) { FX.text(h.x, h.y - h.size - 14, t('ignored'), C.dim, 12); return; } this.hitHero(h, tp.dmg * mul); }
       if (type === 'trapdoor') { h.stun = Math.max(h.stun, tp.stun); FX.text(h.x, h.y - h.size - 14, t('trapped'), C.toxic, 12); }
-      if (type === 'coffin') { this.hitHero(h, tp.dmg * mul); h.s = Math.max(0, h.s - tp.push); const p = pathPos(h.s); h.x = p.x; h.y = p.y; h.room = p.room; }
+      if (type === 'coffin') { this.hitHero(h, tp.dmg * mul); pushBack(h, tp.push); }
     });
     if (disarmed) this.trapCd[i] *= 2;
     FX.spark(x, FLOOR[i] - 10, type === 'brasero' ? C.toxic : C.bone, 10, 90);
