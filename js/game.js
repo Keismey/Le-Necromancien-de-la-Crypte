@@ -475,7 +475,13 @@ const FX = {
   puff(x, y, col, n) {
     for (let i = 0; i < (n || 6); i++) this.parts.push({ x: x + rnd(-8, 8), y: y + rnd(-6, 6), vx: rnd(-20, 20), vy: rnd(-40, -10), life: rnd(0.5, 0.9), t: 0, col, r: rnd(4, 8), g: -20, puff: true });
   },
-  text(x, y, s, col, size) { this.texts.push({ x, y, s, col: col || C.text, t: 0, size: size || 14 }); },
+  // textes flottants : un nouveau texte ne se pose jamais sur un autre encore lisible (sinon les dégâts deviennent illisibles)
+  text(x, y, s, col, size) {
+    const near = this.texts.filter(o => o.t < 0.6 && Math.abs(o.x - x) < 30 && Math.abs(o.y - y) < 40);
+    if (near.length >= 4) return;
+    let ny = y; for (let i = 0; i < 4 && near.some(o => Math.abs(o.y - ny) < (size || 14)); i++) ny -= (size || 14) + 1;
+    this.texts.push({ x: x + (near.length % 2 ? 8 : -8) * (near.length ? 1 : 0), y: ny, s, col: col || C.text, t: 0, size: size || 14 });
+  },
   bolt(x1, y1, x2, y2, col, life) {
     const pts = []; const n = 9;
     for (let i = 0; i <= n; i++) { const k = i / n; pts.push([lerp(x1, x2, k) + (i && i < n ? rnd(-14, 14) : 0), lerp(y1, y2, k) + (i && i < n ? rnd(-6, 6) : 0)]); }
@@ -1961,7 +1967,7 @@ Scenes.crypt = {
     if (this.phase === 'tuto') this.startWave(true);
     if (!resumed && this.run.night === 2 && !S.hints.boss) { S.hints.boss = 1; Toast.show(t('hint_boss')); }
     if (this.newsFluids) { this.newsFluids = false; Hint.show(t('hint_fluids'), null, null, { boxY: 380 }); setTimeout(() => { if (Hint.cur && Hint.cur.text === t('hint_fluids')) Hint.clear(); }, 7000); }
-    if (!resumed && this.run.night === 3 && !S.hints.shop) { S.hints.shop = 1; Toast.show(t('hint_shop')); }
+
   },
   syncUnits() {
     this.units = S.creatures.filter(c => c.pos).map(c => this.makeUnit(c));
@@ -1972,7 +1978,7 @@ Scenes.crypt = {
   },
   makeButtons() {
     this.btns = [
-      this.bPause = UI.btn({ x: 6, y: 6, w: 40, h: 38, icon: 'pause', style: 'dark', on: () => { this.paused = true; } }),
+      this.bPause = UI.btn({ x: 6, y: 6, w: 40, h: 38, icon: 'pause', style: 'dark', on: () => { this.paused = true; Toast.list = []; Hint.clear(); } }),
       this.bAtelier = UI.btn({ x: 8, y: 574, w: 140, h: 54, icon: 'altar', label: t('atelier'), style: 'main', on: () => this.toAtelier() }),
       this.bWave = UI.btn({ x: 156, y: 574, w: 196, h: 54, icon: 'play', label: '', style: 'green', on: () => this.startWave(false) }),
       this.bSpeed = UI.btn({ x: 300, y: 574, w: 52, h: 50, label: 'x1', style: 'dark', on: () => { this.speed = this.speed === 1 ? 2 : 1; } })
@@ -2046,7 +2052,7 @@ Scenes.crypt = {
       boneBurn: base.boneBurn || (boss && boss.base === 'mage' ? 1.5 : 0), ignoreLight: !!base.ignoreLight || !!boss, dodge: base.dodge || 0, splash: !!base.splash,
       size: boss ? 58 : elite ? 48 : 40, hurt: 0, t: rnd(0, 5)
     };
-    if (boss) { this.boss = h; Toast.show(t('boss_' + boss.id), C.legend); Sfx.play('roar'); FX.shake(5, 0.4); }
+    if (boss) { this.boss = h; Sfx.play('roar'); FX.shake(5, 0.4); }
     if (elite) Toast.show(t('elite_comes'), C.rare);
     S.best.heroes[type] = S.best.heroes[type] || 0;
     const p = pathPos(0); h.x = p.x; h.y = p.y; h.room = p.room;
@@ -2317,6 +2323,7 @@ Scenes.crypt = {
     }
   },
   win() {
+    Toast.list = []; Hint.clear();
     const n = this.run.night;
     const stars = 1 + (this.run.invaded ? 0 : 1) + (this.run.destroyed ? 0 : 1);
     const prev = S.stars[n] || 0;
@@ -2333,7 +2340,7 @@ Scenes.crypt = {
     Save.save();
   },
   lose() {
-    this.phase = 'lost'; Sfx.play('lose');
+    this.phase = 'lost'; Sfx.play('lose'); Toast.list = []; Hint.clear();
     const endless = this.run.endless;
     if (endless) S.endless = Math.max(S.endless || 0, this.run.wave);
     S.souls += this.run.kills; // les âmes des héros tués restent acquises, même en cas de défaite
@@ -2484,7 +2491,7 @@ Scenes.crypt = {
       const type = S.trapSlots[i], cd = this.trapCd[i], ready = cd <= 0 && (this.phase === 'wave' || this.phase === 'tuto');
       const fight = this.phase === 'wave' || this.phase === 'tuto';
       Art.trap(type, TRAP_X[i], FLOOR[i] + 2, 40, ready, fight ? 1 - cd / D.traps[type].cd : undefined, this.trapAnim[i] > 0);
-      if (this.phase === 'prep' && S.tuto >= 99) txt(t('tr_' + type), TRAP_X[i], FLOOR[i] - 30, 10, C.bone, 'center');
+      if (this.phase === 'prep' && S.tuto >= 99) txt(t('tr_' + type), TRAP_X[i], FLOOR[i] + 9, 9, C.bone, 'center', { sw: 3 }); // sur la dalle, sous le piège : ne masque plus les créatures
     }
     // postes de garde
     if (this.phase === 'prep') for (let r = 0; r < 3; r++) for (let i = 0; i < 2; i++) {
@@ -2589,13 +2596,15 @@ Scenes.crypt = {
     const title = r.endless ? t('endless') + ' · ' + t('wave_n', { n: r.wave + 1 }) : t('night_n', { n: r.night }) + ' · ' + (this.phase === 'tuto' ? t('tutorial') : t('wave_x', { n: Math.min(r.wave + 1, r.waves), m: r.waves }));
     txt(title, 180, 16, 15, C.text);
     const left = this.queue.length + this.heroes.filter(h => !h.dead).length;
-    if (this.phase === 'wave') txt(t('heroes_left', { n: left }), 180, 36, 11, C.dim);
+    if (this.phase === 'wave' && !(this.boss && !this.boss.dead)) txt(t('heroes_left', { n: left }), 180, 36, 11, C.dim);
     else txt(t('souls_n', { n: S.souls }), 180, 36, 11, C.toxic);
     Art.icon('heart', 312, 25, 22); txt(String(Math.max(0, r.hp)), 330, 26, 16, r.hp > 3 ? C.text : '#ff7a7a', 'left');
     if (this.boss && !this.boss.dead) {
       const k = this.boss.hp / this.boss.maxHp;
-      panel(56, 52, 248, 22, 'rgba(26,15,36,0.9)', 6); ctx.fillStyle = '#5a1a1a'; ctx.fillRect(60, 64, 240, 6); ctx.fillStyle = C.legend; ctx.fillRect(60, 64, 240 * k, 6);
-      txt(t('boss_' + this.boss.boss.id), 180, 58, 10, C.legend);
+      // barre de vie du boss dans l'en-tête, à la place du compteur de héros (ne masque pas l'étage du haut)
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; rr(98, 30, 164, 14, 7); ctx.fill(); ctx.fillStyle = '#5a1a1a'; rr(100, 32, 160, 10, 5); ctx.fill();
+      ctx.fillStyle = C.legend; rr(100, 32, Math.max(10, 160 * k), 10, 5); ctx.fill();
+      txt(t('boss_' + this.boss.boss.id), 180, 37, 9, '#2a1500', 'center', { stroke: false });
     }
   },
   drawBottom() {
@@ -2641,6 +2650,7 @@ Scenes.crypt = {
     UI.draw(this.btns.filter(b => b !== this.bPause));
     UI.drawBtn(this.bPause);
   },
+  calm() { return this.paused || this.phase === 'lost' || this.phase === 'result'; },
   drawPause() {
     ctx.fillStyle = 'rgba(10,5,16,0.8)'; ctx.fillRect(0, 0, W, H);
     txt(t('pause'), W / 2, 200, 28, C.text);
@@ -2661,7 +2671,7 @@ Scenes.crypt = {
       const lines = [t('star1'), t('star2') + (this.run.invaded ? ' ✗' : ' ✓'), t('star3') + (this.run.destroyed ? ' ✗' : ' ✓')];
       lines.forEach((l, i) => txt(l, W / 2, 292 + i * 20, 12, C.dim));
       Art.icon('soul', W / 2 - 40, 370, 26); txt('+' + r.souls, W / 2 - 22, 371, 20, C.toxic, 'left');
-      txt(t('kills_n', { n: this.run.kills }), W / 2, 402, 12, C.dim);
+      txt(killsTxt(this.run.kills), W / 2, 402, 12, C.dim);
     }
     UI.draw(this.endBtns);
   }
@@ -2810,6 +2820,7 @@ function drawTitle(cx, y) {
   ctx.drawImage(titleFont.cv, cx - 180, y - 32, 360, 120);
 }
 
+function killsTxt(n) { return t(n === 0 ? 'kills_0' : n === 1 ? 'kills_1' : 'kills_n', { n }); }
 // Lancement de la partie depuis l'écran titre : tutoriel, nuit en cours ou carte
 function startGame() {
   if (S.tuto === 0 && S.cleared === 0) { go('crypt', { night: 1 }); return; }
@@ -2884,6 +2895,7 @@ Scenes.map = {
   enter() {
     this.sel = null;
     Hint.clear();
+    if (S.cleared >= 2 && !S.hints.shop) { S.hints.shop = 1; Toast.show(t('hint_shop')); }
     const bw = 84, y = 566, bh = 46;
     this.btns = [
       UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('splash') }),
@@ -3109,7 +3121,7 @@ Scenes.bestiary = {
         panel(8, y, 344, rh - 8, C.panel, 10);
         if (seen) Art.hero(h, 46, y + 60, 46, { t: time }); else Art.silhouette('h_' + h, 46, y + 60, 90, 80, 45, 72, (x0, y0) => Art.hero(h, x0, y0, 46, { t: 0 }));
         txt(seen ? t('hero_' + h) : '???', 90, y + 22, 15, i >= 6 ? C.legend : C.text, 'left');
-        if (seen) { txtWrap(t('herod_' + h), 90, y + 42, 250, 10, C.dim, 'left', 12); txt(t('kills_n', { n: S.best.heroes[h] }), 342, y + 22, 11, C.toxic, 'right'); }
+        if (seen) { txtWrap(t('herod_' + h), 90, y + 42, 250, 10, C.dim, 'left', 12); txt(killsTxt(S.best.heroes[h]), 342, y + 22, 11, C.toxic, 'right'); }
       });
     }
     ctx.restore();
@@ -3347,6 +3359,7 @@ function bandFill(x, y, w, h) {
   if (bgi) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.globalAlpha = 0.18; const k = Math.max(w / bgi.naturalWidth, h / bgi.naturalHeight, cv.height / bgi.naturalHeight / 2); ctx.drawImage(bgi, x, y, bgi.naturalWidth * k, bgi.naturalHeight * k); ctx.restore(); }
   const g = ctx.createLinearGradient(0, y, 0, y + Math.min(h, 40)); g.addColorStop(0, 'rgba(0,0,0,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, w, Math.min(h, 40));
 }
+const topBand = { cv: document.createElement('canvas'), ok: false };
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#07040b'; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -3355,7 +3368,7 @@ function render() {
   ctx.setTransform(k, 0, 0, k, view.dpr * view.ox + sx * k, view.dpr * view.oy + sy * k);
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
   if (scene) scene.draw();
-  FX.draw(); Hint.draw(); Toast.draw();
+  FX.draw(); if (!(scene && scene.calm && scene.calm())) { Hint.draw(); Toast.draw(); } // pas de message par-dessus la pause ou les résultats
   if (FX.flash > 0) { ctx.fillStyle = 'rgba(220,255,200,' + (FX.flash * 0.5) + ')'; ctx.fillRect(0, 0, W, H); }
   if (fade.t > 0) { ctx.fillStyle = 'rgba(7,4,11,' + fade.t + ')'; ctx.fillRect(0, 0, W, H); }
   ctx.restore();
@@ -3364,7 +3377,11 @@ function render() {
   const ox = Math.round(view.dpr * view.ox), oy = Math.round(view.dpr * view.oy), gw = Math.round(W * k), gh = Math.round(H * k);
   if (oy > 1) {
     // haut : la barre de titre se prolonge ; bas : fond sombre texturé
-    ctx.drawImage(cv, ox, oy + 1, gw, 2, ox, 0, gw, oy + 1);
+    // pendant une secousse, on réutilise la bande d'avant (sinon le bouton pause s'étire en traînée)
+    if (!(FX.shakeT > 0) || !topBand.ok || topBand.cv.width !== gw) {
+      topBand.cv.width = gw; topBand.cv.height = 2; topBand.cv.getContext('2d').drawImage(cv, ox, oy + 1, gw, 2, 0, 0, gw, 2); topBand.ok = true;
+    }
+    ctx.drawImage(topBand.cv, 0, 0, gw, 2, ox, 0, gw, oy + 1);
     bandFill(0, oy + gh, cv.width, cv.height - oy - gh);
   }
   if (ox > 1) { bandFill(0, 0, ox, cv.height); bandFill(ox + gw, 0, cv.width - ox - gw, cv.height); }
