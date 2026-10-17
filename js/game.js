@@ -291,8 +291,55 @@ function rr(x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 function panel(x, y, w, h, col, r) {
+  // panneau en image (ui_panel) pour les fonds sombres standard
+  const pim = (!col || col === C.panel || /^rgba\(36,22,58/.test(col)) && Art.img('ui_panel');
+  if (pim) { nine(pim, x - 2, y - 2, w + 4, h + 4, Math.min(18, h / 2)); return; }
   rr(x, y, w, h, r === undefined ? 10 : r);
   ctx.fillStyle = col || C.panel; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+}
+
+// image étirée en 9 morceaux : coins intacts, bords et centre étirés (boutons, bannières, levier)
+function nine(im, x, y, w, h, corner, srcCorner) {
+  const iw = im.naturalWidth, ih = im.naturalHeight, sc = srcCorner || Math.round(Math.min(iw, ih) * 0.42);
+  const d = Math.min(corner, w / 2, h / 2), xs = [0, sc, iw - sc, iw], ys = [0, sc, ih - sc, ih], xd = [x, x + d, x + w - d, x + w], yd = [y, y + d, y + h - d, y + h];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    const sw = xs[i + 1] - xs[i], sh = ys[j + 1] - ys[j], dw = xd[i + 1] - xd[i], dh = yd[j + 1] - yd[j];
+    if (sw > 0 && sh > 0 && dw > 0 && dh > 0) ctx.drawImage(im, xs[i], ys[j], sw, sh, xd[i], yd[j], dw + (i < 2 ? 0.5 : 0), dh + (j < 2 ? 0.5 : 0));
+  }
+}
+
+// Barre du haut commune : fond sombre dégradé, liseré os, ombre portée
+function topBar(h) {
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(10,5,18,0.97)'); g.addColorStop(1, 'rgba(30,18,46,0.95)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
+  const sh = ctx.createLinearGradient(0, h, 0, h + 10); sh.addColorStop(0, 'rgba(0,0,0,0.45)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sh; ctx.fillRect(0, h, W, 10);
+  ctx.fillStyle = C.ink; ctx.fillRect(0, h - 3, W, 3); ctx.fillStyle = 'rgba(236,224,195,0.35)'; ctx.fillRect(0, h - 4, W, 1);
+}
+// Bannière de titre : image ui_banner si présente, sinon ruban violet à queues fourchues
+function banner(title, cx, cy, size) {
+  ctx.font = font(size || 18); const tw = ctx.measureText(title).width, w = Math.max(130, tw + 40), h = 32, x = cx - w / 2, y = cy - h / 2;
+  const im = Art.img('ui_banner');
+  if (im) nine(im, x - 20, y - 6, w + 40, h + 12, 30);
+  else {
+    // queues
+    [-1, 1].forEach(d => {
+      const ex = cx + d * (w / 2 + 11), ix = cx + d * (w / 2 - 8);
+      ctx.beginPath(); ctx.moveTo(ix, y + 6); ctx.lineTo(ex, y + 6); ctx.lineTo(ex - d * 7, y + h / 2 + 4); ctx.lineTo(ex, y + h + 2); ctx.lineTo(ix, y + h + 2); ctx.closePath();
+      ctx.fillStyle = '#3a2160'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+    });
+    rr(x, y, w, h, 6);
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#8a5cc4'); g.addColorStop(1, '#4a2a7a');
+    ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+    ctx.strokeStyle = 'rgba(236,224,195,0.45)'; ctx.lineWidth = 1.5; rr(x + 4, y + 4, w - 8, h - 8, 4); ctx.stroke();
+  }
+  txt(title, cx, cy + 1, size || 18, C.text, 'center', { sw: 5 });
+}
+// Compteur d'âmes dans une pastille
+function soulPill(x, y) {
+  ctx.font = font(14); const w = ctx.measureText(String(S.souls)).width + 34;
+  rr(x - w, y - 13, w, 26, 13); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(125,255,74,0.45)'; ctx.stroke();
+  Art.icon('soul', x - w + 13, y, 19); txt(String(S.souls), x - w + 25, y + 1, 14, C.toxic, 'left');
 }
 
 // ============================== UI (boutons) ==============================
@@ -319,10 +366,22 @@ const UI = {
     const cols = { main: [C.violet, C.violetL], green: [C.toxicD, C.toxic], dark: [C.panel, C.panelL], gold: [C.goldD, C.gold], red: ['#7a1f2a', '#c33a4a'] }[b.style] || [C.violet, C.violetL];
     let x = b.x, y = b.y + pr;
     if (b.pulse) { const k = 1 + Math.sin(time * 6) * 0.04; ctx.save(); ctx.translate(x + b.w / 2, y + b.h / 2); ctx.scale(k, k); ctx.translate(-x - b.w / 2, -y - b.h / 2); }
-    rr(x, y + 3 - pr, b.w, b.h, 12); ctx.fillStyle = C.ink; ctx.fill();
-    rr(x, y, b.w, b.h, 12);
-    const g = ctx.createLinearGradient(0, y, 0, y + b.h); g.addColorStop(0, cols[1]); g.addColorStop(1, cols[0]);
-    ctx.fillStyle = b.off ? '#4a4252' : g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+    const bim = Art.img('btn_' + (b.off ? 'dark' : (b.style || 'main')));
+    if (bim) {
+      ctx.save(); if (b.off) ctx.globalAlpha *= 0.7;
+      nine(bim, x - 2, y - 2, b.w + 4, b.h + 6 - pr, Math.min(22, b.h * 0.45)); ctx.restore();
+    } else {
+      rr(x, y + 4 - pr, b.w, b.h, 12); ctx.fillStyle = C.ink; ctx.fill();
+      rr(x, y, b.w, b.h, 12);
+      const g = ctx.createLinearGradient(0, y, 0, y + b.h); g.addColorStop(0, cols[1]); g.addColorStop(1, cols[0]);
+      ctx.fillStyle = b.off ? '#4a4252' : g; ctx.fill();
+      // reflet en haut et ombre interne en bas, pour du relief
+      ctx.save(); rr(x, y, b.w, b.h, 12); ctx.clip();
+      ctx.fillStyle = 'rgba(255,255,255,0.16)'; rr(x + 4, y + 3, b.w - 8, b.h * 0.38, 9); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(x, y + b.h - 5, b.w, 5);
+      ctx.restore();
+      rr(x, y, b.w, b.h, 12); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+    }
     if (b.icon && b.sub) { Art.icon(b.icon, x + b.w / 2, y + b.h * 0.4, b.h * 0.56); }
     else if (b.icon) {
       const isz = Math.min(b.h, b.w) * 0.62;
@@ -682,6 +741,8 @@ const Art = (function () {
   const imgs = {};
   (window.ASSET_LIST || []).forEach(k => { const im = new Image(); im.src = 'assets/' + k + (k.startsWith('bg_') ? '.jpg' : '.png'); imgs[k] = im; });
   function img(k) { const im = imgs[k]; return im && im.complete && im.naturalWidth ? im : null; }
+  // part des images déjà chargées (ou en échec), pour l'écran de démarrage
+  function progress() { const l = Object.values(imgs); return l.length ? l.filter(im => im.complete).length / l.length : 1; }
   // dessine l'image dans une boîte size×size centrée, en gardant les proportions
   function sprite(art, x, y, size) {
     const im = img(art); if (!im) return false;
@@ -1001,7 +1062,7 @@ const Art = (function () {
     c.drawImage(oc, x - ax, y - ay, w, h);
   }
 
-  return { A, deco: sprite, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
+  return { A, progress, deco: sprite, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
 })();
 
 // ============================== Logic (pièces, créatures, stats) ==============================
@@ -1655,13 +1716,18 @@ Scenes.atelier = {
   },
   drawLever() {
     const x = LEVER.x, hy = lerp(LEVER.y0, LEVER.y1, this.lever);
-    ctx.fillStyle = '#2a2232'; rr(x - 7, LEVER.y0 - 10, 14, LEVER.y1 - LEVER.y0 + 20, 7); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
+    const base = Art.img('lever_base'), knob = Art.img('lever_knob');
+    if (base) nine(base, x - 13, LEVER.y0 - 18, 26, LEVER.y1 - LEVER.y0 + 36, 13);
+    else { ctx.fillStyle = '#2a2232'; rr(x - 7, LEVER.y0 - 10, 14, LEVER.y1 - LEVER.y0 + 20, 7); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke(); }
     const ready = this.parts.torso && !this.seamSlots().length;
     if (ready && !this.wake) Art.glowAt(x, hy, 30 + Math.sin(time * 5) * 4, 'rgba(125,255,74,0.45)');
     ctx.strokeStyle = C.ink; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(x, LEVER.y0 - 6); ctx.lineTo(x, hy); ctx.stroke();
     ctx.strokeStyle = C.steel; ctx.lineWidth = 5; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, hy, 15, 0, 7); ctx.fillStyle = C.red; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(x - 4, hy - 4, 4, 0, 7); ctx.fill();
+    if (knob) Art.deco('lever_knob', x, hy, 40);
+    else {
+      ctx.beginPath(); ctx.arc(x, hy, 15, 0, 7); ctx.fillStyle = C.red; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(x - 4, hy - 4, 4, 0, 7); ctx.fill();
+    }
     // éclair
     ctx.save(); ctx.translate(x, LEVER.y0 - 26); ctx.fillStyle = C.gold; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(3, -10); ctx.lineTo(-6, 2); ctx.lineTo(0, 2); ctx.lineTo(-3, 11); ctx.lineTo(7, -2); ctx.lineTo(1, -2); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
@@ -2424,7 +2490,7 @@ Scenes.crypt = {
     if (h.hp < h.maxHp && !h.boss) { const k = h.hp / h.maxHp; ctx.fillStyle = '#300'; ctx.fillRect(h.x - 12, h.y - h.size - 8, 24, 3); ctx.fillStyle = '#ff5050'; ctx.fillRect(h.x - 12, h.y - h.size - 8, 24 * k, 3); }
   },
   drawHud() {
-    ctx.fillStyle = 'rgba(13,7,22,0.85)'; ctx.fillRect(0, 0, W, 50);
+    topBar(52);
     const r = this.run;
     const title = r.endless ? t('endless') + ' · ' + t('wave_n', { n: r.wave + 1 }) : t('night_n', { n: r.night }) + ' · ' + (this.phase === 'tuto' ? t('tutorial') : t('wave_x', { n: Math.min(r.wave + 1, r.waves), m: r.waves }));
     txt(title, 180, 16, 15, C.text);
@@ -2582,6 +2648,39 @@ function graveyard(y) {
   });
 }
 const DEMO = { back: { k: 'm_wings', r: 0 }, head: { k: 'g_head', r: 1 }, torso: { k: 'p_ribs', r: 0 }, arm0: { k: 'r_blade', r: 0 }, arm1: { k: 'm_hand', r: 0 }, legs: { k: 'r_legs', r: 0 }, core: { k: 'p_heart', r: 0 } };
+// Écran de démarrage : illustration (bg_splash si présente), titre, chargement des images, puis « Touche pour commencer »
+Scenes.splash = {
+  enter() { this.t = 0; this.ready = false; },
+  update(dt) { this.t += dt; if (!this.ready && (Art.progress() >= 1 || this.t > 10) && this.t > 0.6) { this.ready = true; this.readyT = this.t; } },
+  up() { if (this.ready) { Sfx.play('tap'); go('menu'); } },
+  draw() {
+    const im = Art.img('bg_splash');
+    if (im) {
+      const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+      ctx.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(8,4,16,0.75)'); g.addColorStop(0.28, 'rgba(8,4,16,0)'); g.addColorStop(0.72, 'rgba(8,4,16,0)'); g.addColorStop(1, 'rgba(8,4,16,0.85)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else {
+      bgNight();
+      Art.glowAt(180, 330, 150, 'rgba(125,255,74,0.16)');
+      if (Art.progress() >= 1) Art.creature(DEMO, 180, 330, 70, { t: time });
+    }
+    const a = Math.min(1, this.t * 1.5);
+    ctx.globalAlpha = a;
+    txt(t('title1'), W / 2, 78, 32, C.text, 'center', { sw: 7 });
+    txt(t('title2'), W / 2, 116, 26, C.toxic, 'center', { sw: 6 });
+    if (!this.ready) {
+      const p = Art.progress();
+      rr(80, 560, 200, 12, 6); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+      if (p > 0) { rr(82, 562, 196 * p, 8, 4); ctx.fillStyle = C.toxic; ctx.fill(); }
+      txt(t('loading'), W / 2, 590, 12, C.dim);
+    } else {
+      ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin((this.t - this.readyT) * 3.5));
+      txt(t('tap_start'), W / 2, 572, 18, C.bone, 'center', { sw: 5 });
+    }
+    ctx.globalAlpha = 1;
+  }
+};
 Scenes.menu = {
   enter() {
     const has = Save.exists() && (S.tuto > 0 || S.cleared > 0);
@@ -2652,22 +2751,41 @@ Scenes.map = {
   draw() {
     bgNight('#1a1028', '#0c0714');
     // chemin
-    ctx.strokeStyle = '#3a2a4a'; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.beginPath();
-    NODES.forEach((n, i) => i ? ctx.lineTo(n[0], n[1]) : ctx.moveTo(n[0], n[1] + 40)); ctx.stroke();
-    ctx.setLineDash([2, 10]); ctx.strokeStyle = 'rgba(236,224,195,0.4)'; ctx.lineWidth = 3; ctx.stroke(); ctx.setLineDash([]);
+    this.drawPath();
     // cathédrale
     this.drawCathedral(300, 120);
     NODES.forEach((n, i) => this.drawNode(i + 1, n[0], n[1]));
     // barre du haut
-    ctx.fillStyle = 'rgba(13,7,22,0.8)'; ctx.fillRect(0, 0, W, 48);
-    txt(t('map_title'), 180, 24, 18, C.text);
-    Art.icon('soul', 300, 24, 22); txt(String(S.souls), 316, 25, 16, C.toxic, 'left');
+    topBar(52);
+    banner(t('map_title'), 172, 25, 15);
+    soulPill(354, 25);
     this.btns[2].badge = this.canBuy() ? '!' : null;
     UI.draw(this.btns);
     this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h - 8, 10, C.text, 'center'));
     if (this.endlessBtn.show) { UI.drawBtn(this.endlessBtn); if (S.titan && S.endless) txt(t('best_n', { n: S.endless }), 180, 102, 10, C.dim); }
     if (S.run) UI.drawBtn(this.resumeBtn);
     if (this.sel) this.drawInfo();
+  },
+  // chemin de dalles entre les nuits ; les dalles déjà franchies sont éclairées en vert
+  drawPath() {
+    const st = Art.img('path_stone'), pts = [[NODES[0][0], NODES[0][1] + 44]].concat(NODES);
+    let k = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round((len - 44) / 17));
+      const lit = i - 1 <= S.cleared;
+      for (let j = 0; j <= n; j++) {
+        const f = (22 + j * (len - 44) / n) / len, x = lerp(x0, x1, f), y = lerp(y0, y1, f), h = Math.sin(++k * 12.9898) * 43758.5453 % 1;
+        const rot = h * 0.8, rx = 7 + Math.abs(h) * 2, ry = 4.5 + Math.abs(h) * 1.2;
+        if (st) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = lit ? 1 : 0.55; ctx.drawImage(st, -rx * 1.3, -ry * 1.3, rx * 2.6, ry * 2.6); ctx.restore(); continue; }
+        ctx.save(); ctx.translate(x, y + 1.5); ctx.rotate(rot);
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
+        ctx.translate(0, -1.5);
+        ctx.fillStyle = lit ? '#6b6478' : '#3e3748'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+        ctx.fillStyle = lit ? 'rgba(200,255,170,0.35)' : 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.ellipse(-rx * 0.25, -ry * 0.3, rx * 0.5, ry * 0.35, 0, 0, 7); ctx.fill();
+        ctx.restore();
+      }
+    }
   },
   drawCathedral(x, y) {
     if (Art.img('deco_castle')) { Art.glowAt(x, y + 10, 30, S.titan ? 'rgba(125,255,74,0.4)' : 'rgba(255,240,180,0.35)'); Art.deco('deco_castle', x, y, 92); return; }
@@ -2678,13 +2796,24 @@ Scenes.map = {
   },
   drawNode(n, x, y) {
     const open = n <= S.cleared + 1, done = S.cleared >= n, sel = this.sel === n;
-    if (open && !done) Art.glowAt(x, y, 34 + Math.sin(time * 4) * 4, 'rgba(125,255,74,0.35)');
-    ctx.beginPath(); ctx.arc(x, y, sel ? 23 : 20, 0, 7);
-    ctx.fillStyle = done ? C.toxicD : open ? C.violet : '#3a3044'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = sel ? C.toxic : C.ink; ctx.stroke();
-    if (open) txt(String(n), x, y + 1, 17, C.text); else Art.icon('lock', x, y, 22);
+    if (open && !done) Art.glowAt(x, y, 36 + Math.sin(time * 4) * 4, 'rgba(125,255,74,0.38)');
+    if (sel) Art.glowAt(x, y, 34, 'rgba(242,240,255,0.35)');
+    const r = sel ? 24 : 21, med = Art.img(done ? 'node_done' : open ? 'node_open' : 'node_lock');
+    if (med) ctx.drawImage(med, x - r * 1.25, y - r * 1.25, r * 2.5, r * 2.5);
+    else {
+      // médaillon de pierre : anneau sombre, disque coloré, liseré os
+      ctx.beginPath(); ctx.arc(x, y + 3, r, 0, 7); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = '#2a2236'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+      const g = ctx.createRadialGradient(x - 5, y - 6, 2, x, y, r - 4);
+      const cs = done ? ['#9dff6a', '#2f8a2a'] : open ? ['#b48ae0', '#4a2a78'] : ['#5a5262', '#2e2836'];
+      g.addColorStop(0, cs[0]); g.addColorStop(1, cs[1]);
+      ctx.beginPath(); ctx.arc(x, y, r - 4, 0, 7); ctx.fillStyle = g; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = sel ? C.toxic : (open ? C.bone : '#6a6272'); ctx.stroke();
+    }
+    if (open) txt(String(n), x, y + 1, sel ? 21 : 19, done ? '#f4ffe8' : C.bone, 'center', { sw: 5 }); else Art.icon('lock', x, y, 22);
     if (D.bosses[n]) { Art.icon('skull', x + 18, y - 16, 18); }
     const st = S.stars[n] || 0;
-    if (done) for (let i = 0; i < 3; i++) Art.icon(i < st ? 'star' : 'star0', x - 16 + i * 16, y + 28, 14);
+    if (done) for (let i = 0; i < 3; i++) Art.icon(i < st ? 'star' : 'star0', x - 16 + i * 16, y + 29 - (i === 1 ? 3 : 0), i === 1 ? 16 : 14);
   },
   drawInfo() {
     const n = this.sel, y = n > 5 ? 330 : 120;
@@ -2762,9 +2891,9 @@ Scenes.shop = {
       }
     });
     ctx.restore();
-    ctx.fillStyle = 'rgba(13,7,22,0.92)'; ctx.fillRect(0, 0, W, 50);
-    txt(t('shop'), 180, 25, 19, C.text);
-    Art.icon('soul', 300, 24, 22); txt(String(S.souls), 316, 25, 16, C.toxic, 'left');
+    topBar(52);
+    banner(t('shop'), 172, 25, 17);
+    soulPill(354, 25);
     UI.drawBtn(this.back);
   },
   maxScroll() { return Math.max(0, 64 + this.items().length * 70 - H + 10); },
@@ -2829,7 +2958,8 @@ Scenes.bestiary = {
     }
     ctx.restore();
     ctx.fillStyle = 'rgba(13,7,22,0.94)'; ctx.fillRect(0, 0, W, top);
-    txt(t('bestiary'), 180, 25, 19, C.text);
+    topBar(52);
+    banner(t('bestiary'), 172, 25, 17);
     txt(t('made_n', { n: S.best.made }), 350, 25, 11, C.dim, 'right');
     [t('tab_creatures'), t('tab_grimoire'), t('tab_heroes')].forEach((l, i) => {
       const on = this.tab === i; rr(8 + i * 116, 52, 112, 34, 10); ctx.fillStyle = on ? C.violet : C.panel; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -2962,8 +3092,8 @@ Scenes.settings = {
   rowY(i) { return 70 + i * 62; },
   draw() {
     bgNight();
-    ctx.fillStyle = 'rgba(13,7,22,0.9)'; ctx.fillRect(0, 0, W, 50);
-    txt(t('settings'), 180, 25, 19, C.text);
+    topBar(52);
+    banner(t('settings'), 180, 25, 17);
     this.rows.forEach((r, i) => {
       const y = this.rowY(i);
       panel(10, y, 340, 54, C.panel, 10);
@@ -3094,7 +3224,7 @@ Save.load();
 try { const ql = new URLSearchParams(location.search).get('lang'); if (ql === 'fr' || ql === 'en') { S.lang = ql; Save.save(); } } catch (_) {}
 resize();
 document.title = t('title1') + ' ' + t('title2');
-goNow('menu');
+goNow(/[?&]nosplash/.test(location.search) ? 'menu' : 'splash');
 requestAnimationFrame(frame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { if (scene === Scenes.crypt && Scenes.crypt.phase === 'wave') Scenes.crypt.paused = true; Save.save(); } });
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic|usercontent/.test(location.hostname)) {

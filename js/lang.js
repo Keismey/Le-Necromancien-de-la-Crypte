@@ -67,7 +67,7 @@ fr: {
   herod_captain: 'Boss de la nuit 2. Lâche son bras.', herod_archmage: 'Boss de la nuit 4. Sorts de zone.', herod_queen: 'Boss de la nuit 6. Esquive et désamorce tout.',
   herod_highpriest: 'Boss de la nuit 8. Soigne tous les héros.', herod_archangel: 'Gardien de la Cathédrale de la Lumière.',
   // carte
-  map_title: 'Carte des nuits', defend: 'Défendre', locked_night: "Termine d'abord la nuit précédente.", waves_info: '{w} vagues de {h} héros',
+  map_title: 'Vers la cathédrale', loading: 'Réveil des morts…', tap_start: 'Touche pour commencer', defend: 'Défendre', locked_night: "Termine d'abord la nuit précédente.", waves_info: '{w} vagues de {h} héros',
   night_desc_1: 'Des paysans en colère. Apprends à piéger et à coudre.', night_desc_2: 'Les guerriers arrivent. Le Capitaine de la garde mène l\'assaut.',
   night_desc_3: 'Un champion en armure ferme la marche. Ses pièces de golem sont précieuses.',
   night_desc_4: "Voleurs et mages ! Nouveauté : les fluides alchimiques. Boss : l'Archimage errant.",
@@ -164,7 +164,7 @@ en: {
   herod_mage: 'Shoots from afar and burns bones.', herod_priest: 'Heals and purifies heroes.', herod_paladin: 'Resists dark magic.',
   herod_captain: 'Night 2 boss. Drops his arm.', herod_archmage: 'Night 4 boss. Area spells.', herod_queen: 'Night 6 boss. Dodges and disarms everything.',
   herod_highpriest: 'Night 8 boss. Heals every hero.', herod_archangel: 'Guardian of the Cathedral of Light.',
-  map_title: 'Night map', defend: 'Defend', locked_night: 'Finish the previous night first.', waves_info: '{w} waves of {h} heroes',
+  map_title: 'To the cathedral', loading: 'Waking the dead…', tap_start: 'Tap to start', defend: 'Defend', locked_night: 'Finish the previous night first.', waves_info: '{w} waves of {h} heroes',
   night_desc_1: 'Angry peasants. Learn to trap and stitch.', night_desc_2: 'Warriors arrive. The Captain of the Guard leads the attack.',
   night_desc_3: 'An armored champion closes the march. Its golem pieces are precious.',
   night_desc_4: 'Rogues and mages! New: alchemical fluids. Boss: the Wandering Archmage.',
