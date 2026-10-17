@@ -89,7 +89,7 @@ fr: {
   shop_grim_2: 'Grimoire III', shopd_grim_2: 'Révèle une recette secrète.', shop_grim_3: 'Grimoire IV', shopd_grim_3: 'Révèle une recette secrète.',
   shop_grim_4: 'Grimoire V', shopd_grim_4: 'Révèle une recette secrète.',
   // bestiaire
-  tab_creatures: 'Créatures', tab_grimoire: 'Grimoire', tab_heroes: 'Héros', made_n: '{n} créées', no_creature_yet: 'Aucune créature encore.',
+  tab_creatures: 'Créatures', tab_grimoire: 'Grimoire', tab_heroes: 'Héros', made_n: '{n} créées', no_creature_yet: 'Aucune créature encore.', no_creature_go: 'Coud ta première créature à l’atelier.',
   // réglages
   set_lang: 'Langue', setd_lang: 'Français / English', set_sound: 'Sons', setd_sound: 'Effets sonores', set_music: 'Musique', setd_music: 'Ambiance musicale',
   set_notes: 'Notes de mise à jour', notes_title: 'Nouveautés', notes_version: 'Version', tap_notes: 'Notes de mise à jour',
@@ -191,7 +191,7 @@ en: {
   shop_grim_0: 'Grimoire I', shopd_grim_0: 'Reveals a secret recipe.', shop_grim_1: 'Grimoire II', shopd_grim_1: 'Reveals a secret recipe.',
   shop_grim_2: 'Grimoire III', shopd_grim_2: 'Reveals a secret recipe.', shop_grim_3: 'Grimoire IV', shopd_grim_3: 'Reveals a secret recipe.',
   shop_grim_4: 'Grimoire V', shopd_grim_4: 'Reveals a secret recipe.',
-  tab_creatures: 'Creatures', tab_grimoire: 'Grimoire', tab_heroes: 'Heroes', made_n: '{n} made', no_creature_yet: 'No creatures yet.',
+  tab_creatures: 'Creatures', tab_grimoire: 'Grimoire', tab_heroes: 'Heroes', made_n: '{n} made', no_creature_yet: 'No creatures yet.', no_creature_go: 'Sew your first creature in the workshop.',
   set_lang: 'Language', setd_lang: 'Français / English', set_sound: 'Sounds', setd_sound: 'Sound effects', set_music: 'Music', setd_music: 'Background music',
   set_notes: 'Patch notes', notes_title: "What's new", notes_version: 'Version', tap_notes: 'Patch notes',
   reset_save: 'Erase save', reset_done: 'Save erased.',

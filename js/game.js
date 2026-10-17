@@ -9,7 +9,7 @@ const D = window.GAME_DATA, LANG = window.LANG;
 const W = 360; let H = 640;
 const OY = () => Math.round((H - 640) / 2); // décalage pour centrer un contenu prévu en 640 de haut // H grandit (jusqu'à 760) dans les scènes « tall » sur les téléphones allongés
 const cv = document.getElementById('game');
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d');   // `let` : certains décors sont pré-rendus en redirigeant ctx vers un canvas hors écran
 let view = { s: 1, ox: 0, oy: 0, dpr: 1 };
 let time = 0;            // temps global (s)
 let scene = null;
@@ -1260,6 +1260,8 @@ const GHOST = { torso: 'p_ribs', head: 'p_skull', arm: 'p_arm', legs: 'w_legs', 
 const BIN = { x: 34, y: 404, r: 26 };
 const LEVER = { x: 334, y0: 292, y1: 404 };
 const DRAWER_Y = 512, CELL = 50, ROSTER_Y = 50;
+// le tiroir gagne des rangées sur les téléphones allongés (2 en 640 de haut, jusqu'à 4)
+const drawerRows = () => Math.max(2, Math.min(4, Math.floor((H - DRAWER_Y - 34) / CELL)));
 const TABS = ['all', 'head', 'torso', 'arm', 'legs', 'back', 'core'];
 
 function distToSeg(px, py, ax, ay, bx, by) {
@@ -1273,6 +1275,7 @@ function distToPath(px, py, pts) {
 }
 
 Scenes.atelier = {
+  tall: true,
   enter(arg) {
     arg = arg || {};
     this.from = arg.from || 'map'; this.titan = !!arg.titan;
@@ -1444,7 +1447,7 @@ Scenes.atelier = {
     const inv = this.inv();
     if (S.tuto === 3) {
       const i = Logic.invSorted('all').findIndex(p => D.pieces[p.k].slot === 'arm');
-      const cx = 6 + Math.floor(Math.max(0, i) / 2) * CELL + CELL / 2, cy = DRAWER_Y + 30 + (Math.max(0, i) % 2) * CELL + CELL / 2;
+      const R = drawerRows(), cx = 6 + Math.floor(Math.max(0, i) / R) * CELL + CELL / 2, cy = DRAWER_Y + 30 + (Math.max(0, i) % R) * CELL + CELL / 2;
       Hint.show(t('tuto_drag'), cx, cy, { dragTo: { x: ALT.arm0.x, y: ALT.arm0.y }, boxY: 474 });
     } else if (S.tuto === 4) {
       const s = this.activeSeam(); if (!s) return; const pts = this.seamPath(s);
@@ -1461,9 +1464,10 @@ Scenes.atelier = {
     return best;
   },
   cellAt(p) {
-    if (p.y < DRAWER_Y + 30 || p.y > DRAWER_Y + 30 + CELL * 2) return null;
+    const R = drawerRows();
+    if (p.y < DRAWER_Y + 30 || p.y > DRAWER_Y + 30 + CELL * R) return null;
     const col = Math.floor((p.x - 6 + this.scroll) / CELL), row = Math.floor((p.y - DRAWER_Y - 30) / CELL);
-    const i = col * 2 + row; const list = this.list();
+    const i = col * R + row; const list = this.list();
     return i >= 0 && col >= 0 && i < list.length ? list[i] : null;
   },
   list() { return this.titan ? S.titanInv : Logic.invSorted(this.tab); },
@@ -1542,7 +1546,7 @@ Scenes.atelier = {
     this.slots().forEach(s => { if (!Logic.fits(piece, s)) return; const a = ALT[s], d = dist(p.x, y, a.x, a.y); if (d < bd) { bd = d; best = s; } });
     return best;
   },
-  maxScroll() { return Math.max(0, Math.ceil(this.list().length / 2) * CELL + 12 - W); },
+  maxScroll() { return Math.max(0, Math.ceil(this.list().length / drawerRows()) * CELL + 12 - W); },
   up(p) {
     if (this.card) { UI.up(this.cardBtns, p); return; }
     if (UI.pressed) { UI.up(this.btns, p); return; }
@@ -1725,6 +1729,7 @@ Scenes.atelier = {
     S.creatures.forEach((cr, i) => {
       const x = 6 + i * 50, sel = this.target === cr;
       panel(x, y, 46, 46, sel ? C.violet : C.panel, 8);
+      rr(x + 1.5, y + 1.5, 43, 43, 7); ctx.strokeStyle = tagOf(cr); ctx.globalAlpha = cr.fallen ? 0.35 : 0.9; ctx.lineWidth = 2.5; ctx.stroke(); ctx.globalAlpha = 1;
       ctx.save(); rr(x, y, 46, 46, 8); ctx.clip();
       Art.creature(cr.parts, x + 23, y + 20, 15, { still: true, noGlow: true, alpha: cr.fallen ? 0.4 : 1 });
       ctx.restore();
@@ -1899,7 +1904,7 @@ Scenes.atelier = {
   drawDrawer() {
     const y = DRAWER_Y;
     ctx.fillStyle = '#2a1a1a'; rr(0, y, W, H - y + 10, 14); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke();
-    ctx.fillStyle = '#3a2420'; ctx.fillRect(4, y + 28, W - 8, CELL * 2 + 4);
+    const R = drawerRows(); ctx.fillStyle = '#3a2420'; ctx.fillRect(4, y + 28, W - 8, CELL * R + 4);
     if (!this.titan) {
       const tw = W / TABS.length;
       TABS.forEach((tb, i) => {
@@ -1909,10 +1914,10 @@ Scenes.atelier = {
       });
     } else txt(t('relics'), W / 2, y + 14, 12, C.legend);
     const list = this.list();
-    ctx.save(); ctx.beginPath(); ctx.rect(4, y + 28, W - 8, CELL * 2 + 4); ctx.clip();
+    ctx.save(); ctx.beginPath(); ctx.rect(4, y + 28, W - 8, CELL * R + 4); ctx.clip();
     if (!list.length) txt(this.titan ? t('titan_all_placed') : t('drawer_empty'), W / 2, y + 28 + CELL, 13, C.dim);
     list.forEach((p, i) => {
-      const col = Math.floor(i / 2), row = i % 2, x = 6 + col * CELL - this.scroll, cy = y + 30 + row * CELL;
+      const col = Math.floor(i / R), row = i % R, x = 6 + col * CELL - this.scroll, cy = y + 30 + row * CELL;
       if (x < -CELL || x > W) return;
       if (this.drag && this.drag.p === p) return;
       ctx.fillStyle = 'rgba(0,0,0,0.3)'; rr(x + 2, cy + 2, CELL - 4, CELL - 4, 8); ctx.fill();
@@ -1928,6 +1933,7 @@ Scenes.atelier = {
   drawCard() {
     ctx.fillStyle = 'rgba(10,5,16,0.75)'; ctx.fillRect(0, 0, W, H);
     const { cr, st } = this.card;
+    ctx.save(); ctx.translate(0, OY());
     panel(30, 120, 300, 410, C.panel, 16);
     Art.glowAt(180, 250, 110, 'rgba(125,255,74,0.3)');
     Art.creature(cr.parts, 180, 240, 64, {});
@@ -1941,7 +1947,8 @@ Scenes.atelier = {
     Object.keys(st.mut).forEach(m => tags.push(t('mut_' + m)));
     txtWrap(tags.join(' · ') || t('no_bonus'), 180, 420, 270, 12, st.recipe ? C.legend : C.toxic);
     if (this.newRecipe) { txt(t('recipe_found'), 180, 452, 13, C.legend); }
-    this.cardBtns[0].y = 470; UI.draw(this.cardBtns);
+    ctx.restore();
+    this.cardBtns[0].y = 470 + OY(); UI.draw(this.cardBtns);
   }
 };
 function P0(parts) { return !!parts.torso; }
@@ -1950,6 +1957,9 @@ function P0(parts) { return !!parts.torso; }
 // Géométrie de la crypte : recalculée selon la hauteur de l'écran (les étages profitent des téléphones allongés)
 let ROOM_TOP, ROOM_H, FLOOR, PATH, SEGS, PATH_LEN, ROOM_S0, BAR_Y, UNIT_K = 1;
 const POWER = { x: 40, y: 580, r: 28 };
+// une couleur par créature (anneau au sol en combat, liseré de sa carte en bas) pour les reconnaître d'un coup d'œil
+const TAGS = ['#4ab0ff', '#ffb030', '#e070ff', '#40e0c0', '#ff6a8a', '#f2e05a'];
+const tagOf = cr => TAGS[Math.max(0, S.creatures.indexOf(cr)) % TAGS.length];
 function cryptLayout() {
   const dh = Math.floor((H - 640) * 0.8 / 3);
   ROOM_H = 158 + dh; ROOM_TOP = [54, 54 + ROOM_H, 54 + 2 * ROOM_H]; FLOOR = ROOM_TOP.map(y => y + ROOM_H - 16);
@@ -2094,7 +2104,7 @@ Scenes.crypt = {
       move: base.move * rnd(0.92, 1.08), rate: base.rate, range: base.range, cd: 0, atk: 0, stun: 0, slow: 0, slowK: 0, burn: null, poison: null,
       trapHits: 0, disarm: base.disarm || 0, crit: base.crit || 0, heal: base.heal || 0, healAll: !!base.healAll, healCd: 2, darkResist: base.darkResist || 0,
       boneBurn: base.boneBurn || (boss && boss.base === 'mage' ? 1.5 : 0), ignoreLight: !!base.ignoreLight || !!boss, dodge: base.dodge || 0, splash: !!base.splash,
-      size: boss ? 64 : elite ? 54 : 46, hurt: 0, t: rnd(0, 5)
+      size: boss ? 64 : elite ? 54 : 46, lane: boss ? 0 : [0, -5, 3, -3, 5][(this.laneN = (this.laneN || 0) + 1) % 5], hurt: 0, t: rnd(0, 5)
     };
     if (boss) { this.boss = h; Sfx.play('roar'); FX.shake(5, 0.4); }
     if (elite) Toast.show(t('elite_comes'), C.rare);
@@ -2294,7 +2304,7 @@ Scenes.crypt = {
         if (h.cd <= 0) {
           h.cd = h.rate; h.atk = 1;
           const d = this.heroDmgTo(tg, h);
-          if (h.range > 40) this.shots.push({ x: h.x, y: h.y - h.size * 0.8, tx: tg.x, ty: FLOOR[tg.room] - 30, t: 0, col: h.heal ? C.gold : '#7fd6ff' });
+          if (h.range > 40) this.shots.push({ x: h.x + (h.vdx || 0), y: h.y + (h.lane || 0) - h.size * UNIT_K * 0.8, tx: tg.x, ty: FLOOR[tg.room] - 30, t: 0, col: h.heal ? C.gold : '#7fd6ff' });
           this.hitCreature(tg, d, h.range <= 40);
           if (h.splash) this.units.forEach(o => { if (o !== tg && !o.dead && o.room === tg.room && Math.abs(o.x - tg.x) < 50) this.hitCreature(o, d * 0.6, false); });
           Sfx.play('hurt');
@@ -2509,18 +2519,31 @@ Scenes.crypt = {
     c.fillStyle = '#05030a'; c.fillRect(0, FLOOR[0] - 46, 14, 46);
     return oc;
   },
+  // décor fixe (fond, salles, sols, échelles) pré-rendu à la résolution de l'écran : le redessiner à chaque image coûtait l'essentiel du temps de rendu
+  drawStatic() {
+    if (!this.bg) { this.bg = this.renderBg(); this.stat = null; }
+    const bgi = Art.img('bg_crypt'), k = view.dpr * view.s;
+    const key = H + '|' + k + '|' + !!bgi + !!Art.img('deco_floor') + !!Art.img('deco_ladder');
+    if (!this.stat || this.statKey !== key) {
+      const oc = document.createElement('canvas'); oc.width = Math.ceil(W * k); oc.height = Math.ceil(H * k);
+      const main = ctx; ctx = oc.getContext('2d'); ctx.scale(k, k);
+      try {
+        ctx.drawImage(this.bg, 0, 0, W, H);
+        if (bgi) ROOM_TOP.forEach((y, r) => {
+          const rw = W - 16, rh = FLOOR[r] - y - 4, k = Math.max(rw / bgi.naturalWidth, rh / bgi.naturalHeight);
+          ctx.save(); ctx.beginPath(); ctx.rect(8, y + 4, rw, rh); ctx.clip(); ctx.globalAlpha = 0.9;
+          ctx.drawImage(bgi, 180 - bgi.naturalWidth * k / 2, y + 4 + rh / 2 - bgi.naturalHeight * k / 2, bgi.naturalWidth * k, bgi.naturalHeight * k);
+          // assombrir pour garder les personnages lisibles
+          ctx.globalAlpha = 1; const g = ctx.createLinearGradient(0, y, 0, FLOOR[r]); g.addColorStop(0, 'rgba(8,4,16,0.6)'); g.addColorStop(1, 'rgba(8,4,16,0.25)'); ctx.fillStyle = g; ctx.fillRect(8, y + 4, rw, rh); ctx.restore();
+        });
+        this.drawStructure();
+      } finally { ctx = main; }
+      this.stat = oc; this.statKey = key;
+    }
+    ctx.drawImage(this.stat, 0, 0, W, H);
+  },
   draw() {
-    if (!this.bg) this.bg = this.renderBg();
-    ctx.drawImage(this.bg, 0, 0, W, H);
-    const bgi = Art.img('bg_crypt');
-    if (bgi) ROOM_TOP.forEach((y, r) => {
-      const rw = W - 16, rh = FLOOR[r] - y - 4, k = Math.max(rw / bgi.naturalWidth, rh / bgi.naturalHeight);
-      ctx.save(); ctx.beginPath(); ctx.rect(8, y + 4, rw, rh); ctx.clip(); ctx.globalAlpha = 0.9;
-      ctx.drawImage(bgi, 180 - bgi.naturalWidth * k / 2, y + 4 + rh / 2 - bgi.naturalHeight * k / 2, bgi.naturalWidth * k, bgi.naturalHeight * k);
-      // assombrir pour garder les personnages lisibles
-      ctx.globalAlpha = 1; const g = ctx.createLinearGradient(0, y, 0, FLOOR[r]); g.addColorStop(0, 'rgba(8,4,16,0.6)'); g.addColorStop(1, 'rgba(8,4,16,0.25)'); ctx.fillStyle = g; ctx.fillRect(8, y + 4, rw, rh); ctx.restore();
-    });
-    this.drawStructure();
+    this.drawStatic();
     // torches
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
       const y = ROOM_TOP[r] + 44, f = Math.sin(time * 10 + i * 2) * 1.5;
@@ -2551,7 +2574,8 @@ Scenes.crypt = {
     // créatures
     this.units.forEach(u => this.drawUnit(u));
     // héros
-    this.heroes.forEach(h => this.drawHero(h));
+    this.layoutHeroes();
+    this.heroes.slice().sort((a, b) => (a.y + (a.lane || 0)) - (b.y + (b.lane || 0))).forEach(h => this.drawHero(h));
     // tirs
     this.shots.forEach(s => { const x = lerp(s.x, s.tx, s.t), y = lerp(s.y, s.ty, s.t) - Math.sin(s.t * Math.PI) * 16; Art.glowAt(x, y, 10, s.col); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, 7); ctx.fill(); });
     // butin
@@ -2622,6 +2646,7 @@ Scenes.crypt = {
       return;
     }
     const size = 28 * UNIT_K, foot = Art.creatureFoot(c.parts);
+    ctx.save(); ctx.globalAlpha = 0.85; ctx.strokeStyle = tagOf(c); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(u.x, fy + 1, 15 * UNIT_K, 4.5, 0, 0, 7); ctx.stroke(); ctx.restore();
     const co = { t: time, seed: u.seed, flip: !u.flip, atk: u.atk > 0 ? 1 - u.atk : 0, ghost: u.st.mut.soul, noGlow: true }, cy = fy - foot * size - 1;
     Art.creature(c.parts, u.x, cy, size, co);
     if (u.hurt > 0) Art.tinted(u.x, fy + 4, size * 4, size * 4, 'rgba(255,50,50,0.55)', () => Art.creature(c.parts, 0, cy - fy - 4, size, co));
@@ -2629,17 +2654,30 @@ Scenes.crypt = {
     const hp = Math.max(0, u.st.hp - c.dmg), k = hp / u.st.hp;
     if (k < 1) { const y = fy - foot * size - size * 1.25; ctx.fillStyle = '#300'; ctx.fillRect(u.x - 16, y, 32, 4); ctx.fillStyle = k > 0.5 ? C.toxic : k > 0.25 ? '#e0b030' : C.red; ctx.fillRect(u.x - 16, y, 32 * k, 4); }
   },
+  // Affichage seulement : les héros arrêtés au même endroit se rangent en file au lieu de se fondre en un paquet
+  layoutHeroes() {
+    for (let r = 0; r < 3; r++) {
+      const dir = ROOM_DIR[r], list = this.heroes.filter(h => !h.dead && h.room === r).sort((a, b) => b.s - a.s);
+      let prev = null;
+      list.forEach(h => {
+        let tx = 0;
+        if (prev) { const lim = prev.x + (prev.vdx || 0) - dir * 15; if ((h.x - lim) * dir > 0) tx = clamp(lim - h.x, -70, 70); }
+        h.vdx = (h.vdx || 0) + (tx - (h.vdx || 0)) * 0.2;
+        prev = h;
+      });
+    }
+  },
   drawHero(h) {
-    const hs = h.size * UNIT_K;
+    const hs = h.size * UNIT_K, X = h.x + (h.vdx || 0), Y = h.y + (h.lane || 0); // position d'affichage (file d'attente lisible)
     if (h.dead) { ctx.globalAlpha = Math.max(0, (h.deadT || 0) * 2); }
     const dir = ROOM_DIR[h.room] || (h.room === -1 ? 1 : 1);
-    Art.hero(h.type, h.x, h.y, hs, { t: h.t, walk: !h.stun && !h.atk, flip: dir < 0, atk: h.atk > 0 ? 1 - h.atk : 0, hurt: h.hurt > 0 });
+    Art.hero(h.type, X, Y, hs, { t: h.t, walk: !h.stun && !h.atk, flip: dir < 0, atk: h.atk > 0 ? 1 - h.atk : 0, hurt: h.hurt > 0 });
     ctx.globalAlpha = 1;
     if (h.dead) return;
-    if (h.elite && !h.boss) Art.glowAt(h.x, h.y - hs * 0.5, hs * 0.7, 'rgba(74,168,255,0.25)');
-    if (h.stun > 0) txt('✦', h.x, h.y - hs - 10, 12, C.gold);
-    if (h.burn || h.poison) ctx.fillStyle = h.burn ? '#ff8a2a' : C.toxic, ctx.beginPath(), ctx.arc(h.x + 8, h.y - hs - 4, 3, 0, 7), ctx.fill();
-    if (h.hp < h.maxHp && !h.boss) { const k = h.hp / h.maxHp; ctx.fillStyle = '#300'; ctx.fillRect(h.x - 12, h.y - hs - 8, 24, 3); ctx.fillStyle = '#ff5050'; ctx.fillRect(h.x - 12, h.y - hs - 8, 24 * k, 3); }
+    if (h.elite && !h.boss) Art.glowAt(X, Y - hs * 0.5, hs * 0.7, 'rgba(74,168,255,0.25)');
+    if (h.stun > 0) txt('✦', X, Y - hs - 10, 12, C.gold);
+    if (h.burn || h.poison) ctx.fillStyle = h.burn ? '#ff8a2a' : C.toxic, ctx.beginPath(), ctx.arc(X + 8, Y - hs - 4, 3, 0, 7), ctx.fill();
+    if (h.hp < h.maxHp && !h.boss) { const k = h.hp / h.maxHp; ctx.fillStyle = '#300'; ctx.fillRect(X - 12, Y - hs - 8, 24, 3); ctx.fillStyle = '#ff5050'; ctx.fillRect(X - 12, Y - hs - 8, 24 * k, 3); }
   },
   drawHud() {
     topBar(52);
@@ -2673,6 +2711,7 @@ Scenes.crypt = {
       S.creatures.forEach((c, i) => {
         const x = 8 + i * 50, out = !c.pos;
         panel(x, cy0, 46, 44, out ? '#2a2030' : C.panel, 8);
+        rr(x + 1.5, cy0 + 1.5, 43, 41, 7); ctx.strokeStyle = tagOf(c); ctx.globalAlpha = c.fallen ? 0.35 : 0.9; ctx.lineWidth = 2.5; ctx.stroke(); ctx.globalAlpha = 1;
         ctx.save(); rr(x, cy0, 46, 44, 8); ctx.clip();
         Art.creature(c.parts, x + 23, cy0 + 19, 15, { still: true, noGlow: true, alpha: c.fallen ? 0.4 : out ? 0.6 : 1 }); ctx.restore();
         if (c.pos) txt(['I', 'II', 'III'][c.pos[0]], x + 38, cy0 + 8, 9, C.dim);
@@ -2695,6 +2734,7 @@ Scenes.crypt = {
       this.units.forEach((u, i) => {
         const x = 84 + (i % 3) * 70, yy = cy0 + Math.floor(i / 3) * 52;
         panel(x, yy, 64, 48, u.dead ? '#2a1a1a' : C.panel, 8);
+        rr(x + 1.5, yy + 1.5, 61, 45, 7); ctx.strokeStyle = tagOf(u.cr); ctx.globalAlpha = u.dead ? 0.35 : 0.9; ctx.lineWidth = 2.5; ctx.stroke(); ctx.globalAlpha = 1;
         ctx.save(); rr(x, yy, 64, 48, 8); ctx.clip(); Art.creature(u.cr.parts, x + 20, yy + 22, 13, { still: true, noGlow: true, alpha: u.dead ? 0.35 : 1 }); ctx.restore();
         const hp = Math.max(0, u.st.hp - u.cr.dmg);
         txt(u.dead ? '✝' : String(Math.round(hp)), x + 48, yy + 18, 12, u.dead ? '#ff7a7a' : C.text);
@@ -2890,6 +2930,17 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.5', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['L\'atelier occupe tout l\'écran : le tiroir affiche plus de pièces sur les téléphones allongés.',
+      'Chaque créature a sa couleur, au sol pendant le combat, sur sa carte en bas et dans l\'atelier : on voit tout de suite qui est blessée.',
+      'Les héros d\'une grosse vague ne s\'empilent plus en un seul paquet : ils font la queue et se décalent en hauteur.',
+      'Combat plus fluide : le décor de la crypte est préparé une seule fois au lieu d\'être redessiné à chaque image.',
+      'Fin de campagne plus progressive : les nuits 8, 9 et 10 ont été adoucies d\'après des campagnes complètes simulées.'],
+    en: ['The workshop fills the whole screen: the drawer shows more pieces on tall phones.',
+      'Each creature has its own colour, on the ground during fights, on its card at the bottom and in the workshop, so you can see at once who is hurt.',
+      'Heroes in big waves no longer pile up in one clump: they queue up and stagger in height.',
+      'Smoother fights: the crypt scenery is prepared once instead of being redrawn every frame.',
+      'A more gradual end of campaign: nights 8, 9 and 10 were softened based on simulated full campaigns.'] },
   { v: '1.4', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['L\'écran titre, la carte, la boutique, le bestiaire, les réglages, les nouveautés et le broyeur occupent tout l\'écran des téléphones allongés.',
       'La créature de tête ne se laisse plus attirer jusqu\'à l\'entrée par les tireurs : elle riposte sans quitter le milieu de l\'étage.',
@@ -3180,7 +3231,7 @@ Scenes.bestiary = {
     ctx.save(); ctx.beginPath(); ctx.rect(0, top, W, H - top); ctx.clip();
     const rh = this.rowH();
     if (this.tab === 0) {
-      if (!S.best.creatures.length) txt(t('no_creature_yet'), W / 2, 200, 13, C.dim);
+      if (!S.best.creatures.length) { txt(t('no_creature_yet'), W / 2, 200, 13, C.dim); txt(t('no_creature_go'), W / 2, 224, 12, C.dim); }
       S.best.creatures.forEach((c, i) => {
         const y = top + 6 + i * rh - this.scroll; if (y < top - rh || y > H) return;
         panel(8, y, 344, rh - 8, C.panel, 10);
@@ -3619,8 +3670,10 @@ function render() {
   if (oy > 1) {
     // haut : la barre de titre se prolonge ; bas : fond sombre texturé
     // pendant une secousse, on réutilise la bande d'avant (sinon le bouton pause s'étire en traînée)
-    if (!(FX.shakeT > 0) || !topBand.ok || topBand.cv.width !== gw) {
-      topBand.cv.width = gw; topBand.cv.height = 2; topBand.cv.getContext('2d').drawImage(cv, ox, oy + 1, gw, 2, 0, 0, gw, 2); topBand.ok = true;
+    // copie lue depuis le canvas principal : coûteuse (force le rendu), donc rafraîchie au changement d'écran ou toutes les 2 s
+    const bandKey = (scene && scene.id) + gw + 'x' + oy;
+    if (!topBand.ok || topBand.key !== bandKey || (!(FX.shakeT > 0) && (fade.t > 0 || time - topBand.at > 2))) {
+      topBand.key = bandKey; topBand.at = time; topBand.cv.width = gw; topBand.cv.height = 2; topBand.cv.getContext('2d').drawImage(cv, ox, oy + 1, gw, 2, 0, 0, gw, 2); topBand.ok = true;
     }
     ctx.drawImage(topBand.cv, 0, 0, gw, 2, ox, 0, gw, oy + 1);
     bandFill(0, oy + gh, cv.width, cv.height - oy - gh);

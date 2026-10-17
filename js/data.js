@@ -86,7 +86,7 @@ window.GAME_DATA = {
     paladin: { hp: 100, str: 8,  mag: 0, def: 35, move: 24, rate: 1.7, range: 20, darkResist: 0.5 }
   },
   // multiplicateurs des héros par nuit n : 1 + a·(n-1) + b·(n-1)² (la courbe se raidit en fin de partie)
-  heroHp: [0.12, 0.08], heroDmg: [0.07, 0.04],
+  heroHp: [0.12, 0.07], heroDmg: [0.07, 0.04],
   waveCount: [4, 2, 0.15],          // héros par vague : base + a·n + b·n²
   elite: { hpMul: 3, dmgMul: 1.5, size: 1.3 },
 
@@ -94,7 +94,7 @@ window.GAME_DATA = {
     2:  { id: 'captain', base: 'warrior', hp: 320,  str: 14, mag: 0,  def: 40, move: 22, rate: 1.4, range: 22, relic: 'capt',  legend: 'L_arm' },
     4:  { id: 'archmage', base: 'mage',   hp: 280,  str: 0,  mag: 16, def: 15, move: 24, rate: 1.8, range: 120, splash: true, relic: 'arch', legend: 'L_wings' },
     6:  { id: 'queen', base: 'rogue',     hp: 400,  str: 16, mag: 0,  def: 25, move: 40, rate: 0.8, range: 22, disarm: 1, dodge: 0.3, relic: 'queen', legend: 'L_legs' },
-    8:  { id: 'highpriest', base: 'priest', hp: 520, str: 0, mag: 14, def: 35, move: 22, rate: 1.8, range: 90, heal: 25, healAll: true, relic: 'priest', legend: 'L_heart' },
+    8:  { id: 'highpriest', base: 'priest', hp: 520, str: 0, mag: 14, def: 35, move: 22, rate: 1.8, range: 90, heal: 18, healAll: true, relic: 'priest', legend: 'L_heart' },
     10: { id: 'archangel', base: 'paladin', hp: 1300, str: 26, mag: 12, def: 55, move: 20, rate: 1.3, range: 24, darkResist: 0.5, relic: 'angel' }
   },
 
@@ -107,9 +107,9 @@ window.GAME_DATA = {
     { warrior: 4, rogue: 3, mage: 3 },
     { warrior: 3, rogue: 3, mage: 3, priest: 1 },
     { warrior: 3, rogue: 3, mage: 2, priest: 2 },                // pas encore de paladin : il arrive à la nuit 8 (la nuit 7 faisait un mur)
-    { warrior: 2, rogue: 2, mage: 2, priest: 2, paladin: 2 },
-    { warrior: 2, rogue: 2, mage: 2, priest: 2, paladin: 2 },
-    { warrior: 1, rogue: 2, mage: 2, priest: 2, paladin: 3 }
+    { warrior: 3, rogue: 2, mage: 2, priest: 2, paladin: 1 },   // 1er paladin + boss : nuit adoucie (58 % → cible ~70 % en simulation)
+    { warrior: 2, rogue: 3, mage: 2, priest: 2, paladin: 1 },   // nuit 9 : marche moins haute avant le final (campagnes simulées)
+    { warrior: 2, rogue: 2, mage: 2, priest: 2, paladin: 2 }
   ],
   wavesPerNight: 3,
   spawnGap: [2.6, 1.6],             // écart entre héros : nuit 1 → nuit 10
