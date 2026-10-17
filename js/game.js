@@ -1652,13 +1652,13 @@ Scenes.atelier = {
     if (!Object.keys(P).some(k => P[k])) { txt(t('altar_empty'), W / 2, y + 17, 12, C.dim); return; }
     const st = Logic.stats(P);
     const vals = [['hp', this.target ? Math.max(0, st.hp - (this.target.dmg || 0)) + '/' + st.hp : st.hp], ['str', st.str], ['mag', st.mag], ['spd', st.spd], ['def', st.def]];
-    vals.forEach((v, i) => { const x = 12 + i * 58 + (i ? 22 : 0); txt(t('st_' + v[0]), x, y + 10, 10, C.dim, 'left', { stroke: false }); txt(String(v[1]), x, y + 24, 13, C.text, 'left'); });
+    vals.forEach((v, i) => { const x = 12 + i * 46 + (i ? 22 : 0); txt(t('st_' + v[0]), x, y + 10, 10, C.dim, 'left', { stroke: false }); txt(String(v[1]), x, y + 24, 13, C.text, 'left'); });
     const tags = [];
     if (st.recipe) tags.push(t('rc_' + st.recipe.id));
     st.sets.forEach(s => tags.push(t('set_' + s)));
     if (st.fly) tags.push(t('tag_fly'));
     if (st.ranged) tags.push(t('tag_ranged'));
-    if (tags.length) txt(tags.slice(0, 2).join(' · '), 346, y + 17, 10, st.recipe ? C.legend : C.toxic, 'right');
+    if (tags.length) txtWrap(tags.slice(0, 2).join(' · '), 302, y + (tags.length > 1 || tags[0].length > 16 ? 11 : 17), 96, 9, st.recipe ? C.legend : C.toxic, 'center', 11);
   },
   drawVials() {
     const o = this.titan ? [] : this.owned();
