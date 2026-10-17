@@ -382,9 +382,14 @@ const UI = {
     let x = b.x, y = b.y + pr;
     if (b.pulse) { const k = 1 + Math.sin(time * 6) * 0.04; ctx.save(); ctx.translate(x + b.w / 2, y + b.h / 2); ctx.scale(k, k); ctx.translate(-x - b.w / 2, -y - b.h / 2); }
     const bim = Art.img('btn_' + (b.off ? 'dark' : (b.style || 'main')));
+    // zone utile (face intérieure du bouton) où se placent texte et icône
+    let fx0 = x + 6, fx1 = x + b.w - 6, fy0 = y + 3, fy1 = y + b.h - 4;
     if (bim) {
       ctx.save(); if (b.off) ctx.globalAlpha *= 0.7;
-      three(bim, x - 3, y - 2, b.w + 6, b.h + 5, b.off || b.style === 'dark' ? 60 : 75); ctx.restore();
+      const X = x - 3, Y = y - 2, BW = b.w + 6, BH = b.h + 5, k = BH / bim.naturalHeight;
+      three(bim, X, Y, BW, BH, b.off || b.style === 'dark' ? 60 : 75); ctx.restore();
+      const side = Math.min(41 * k, BW * 0.2);
+      fx0 = X + side; fx1 = X + BW - side; fy0 = Y + 30 * k; fy1 = Y + 87 * k;
     } else {
       rr(x, y + 4 - pr, b.w, b.h, 12); ctx.fillStyle = C.ink; ctx.fill();
       rr(x, y, b.w, b.h, 12);
@@ -397,12 +402,18 @@ const UI = {
       ctx.restore();
       rr(x, y, b.w, b.h, 12); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
     }
-    if (b.icon && b.sub) { Art.icon(b.icon, x + b.w / 2, y + b.h * 0.38, b.h * 0.5); }
+    const fw = fx1 - fx0, fh = fy1 - fy0, fcx = (fx0 + fx1) / 2, fcy = (fy0 + fy1) / 2, tcol = b.off ? '#999' : C.text;
+    // texte réduit s'il déborde de la face
+    const fit = (s, maxW, size) => { ctx.font = font(size); const tw = ctx.measureText(s).width; return tw > maxW ? Math.max(9, Math.floor(size * maxW / tw)) : size; };
+    if (b.icon && (b.sub || !b.label)) Art.icon(b.icon, fcx, fcy, Math.min(b.h * 0.62, fh * 1.35, fw * 0.9));
     else if (b.icon) {
-      const isz = Math.min(b.h, b.w) * 0.62;
-      if (b.label) { Art.icon(b.icon, x + isz * 0.5 + 10, y + b.h / 2, isz); txt(b.label, x + isz + 16 + (b.w - isz - 16) / 2, y + b.h / 2 + 1, b.size, b.off ? '#999' : C.text); }
-      else Art.icon(b.icon, x + b.w / 2, y + b.h / 2, isz);
-    } else txt(b.label, x + b.w / 2, y + b.h / 2 + 1, b.size, b.off ? '#999' : C.text);
+      // icône + texte centrés ensemble dans la face, l'icône ne dépasse pas du cadre doré
+      const isz = Math.min(b.h * 0.6, fh * 1.12), gap = 6;
+      const sz = fit(b.label, fw - isz - gap - 10, b.size || 16); ctx.font = font(sz);
+      const tw = ctx.measureText(b.label).width, gx = fcx - (isz + gap + tw) / 2;
+      Art.icon(b.icon, gx + isz / 2, fcy, isz);
+      txt(b.label, gx + isz + gap + tw / 2, fcy + 1, sz, tcol);
+    } else txt(b.label, fcx, fcy + 1, fit(b.label, fw - 8, b.size || 16), tcol);
     if (b.badge) { ctx.beginPath(); ctx.arc(x + b.w - 4, y + 4, 9, 0, 7); ctx.fillStyle = C.red; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke(); txt(b.badge, x + b.w - 4, y + 5, 11); }
     if (b.pulse) ctx.restore();
   }
@@ -2631,7 +2642,7 @@ const sheenCv = document.createElement('canvas');
 function drawCrystal(x, bottom, danger) {
   const im = Art.img('deco_crystal'); if (!im) return false;
   const gem = Art.img(danger ? 'deco_crystal_red' : 'deco_crystal_gem');
-  const iw = im.naturalWidth, ih = im.naturalHeight, h = 72, s = h / ih, w = iw * s, x0 = x - w / 2, y0 = bottom - h;
+  const iw = im.naturalWidth, ih = im.naturalHeight, h = 72, s = h / ih, w = iw * s, x0 = x - w / 2, y0 = bottom - h * 0.87; // socle en perspective : le centre de sa base (87 % de l'image) pose sur le sol
   const p = (Math.sin(time * (danger ? 6 : 2.2)) + 1) / 2, gy = y0 + h * 0.34;
   Art.glowAt(x, gy, 40 + p * 8, danger ? 'rgba(255,60,40,' + (0.3 + p * 0.25).toFixed(3) + ')' : 'rgba(125,255,74,' + (0.22 + p * 0.16).toFixed(3) + ')');
   ctx.drawImage(im, x0, y0, w, h);
@@ -2762,7 +2773,7 @@ Scenes.map = {
   enter() {
     this.sel = null;
     Hint.clear();
-    const bw = 84, y = 574, bh = UI.bigH(56);
+    const bw = 84, y = 566, bh = UI.bigH(46);
     this.btns = [
       UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('menu') }),
       UI.btn({ x: 6, y, w: bw, h: bh, icon: 'altar', label: '', sub: true, style: 'main', on: () => go('atelier', { from: 'map' }) }),
@@ -2795,7 +2806,7 @@ Scenes.map = {
     soulPill(354, 25);
     this.btns[2].badge = this.canBuy() ? '!' : null;
     UI.draw(this.btns);
-    this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h - 13, 10, C.text, 'center'));
+    this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h + 10, 11, C.text, 'center'));
     if (this.endlessBtn.show) { UI.drawBtn(this.endlessBtn); if (S.titan && S.endless) txt(t('best_n', { n: S.endless }), 180, 102, 10, C.dim); }
     if (S.run) UI.drawBtn(this.resumeBtn);
     if (this.sel) this.drawInfo();
