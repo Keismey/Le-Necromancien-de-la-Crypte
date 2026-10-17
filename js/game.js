@@ -2309,7 +2309,7 @@ Scenes.crypt = {
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
       const y = ROOM_TOP[r] + 44, f = Math.sin(time * 10 + i * 2) * 1.5;
       Art.glowAt(x, y - 8, 52 + f * 3, 'rgba(125,255,74,0.22)');
-      if (Art.deco('deco_torch', x, y, 44)) return;
+      if (Art.deco('deco_torch', x, y - 4, 52)) return;
       ctx.fillStyle = '#5a4030'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.lineTo(x + 6, y - 4); ctx.lineTo(x + 3, y + 16); ctx.lineTo(x - 3, y + 16); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#3a3440'; ctx.fillRect(x - 8, y - 6, 16, 4); ctx.strokeRect(x - 8, y - 6, 16, 4);
