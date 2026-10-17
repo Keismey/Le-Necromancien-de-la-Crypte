@@ -1001,7 +1001,7 @@ const Art = (function () {
     c.drawImage(oc, x - ax, y - ay, w, h);
   }
 
-  return { A, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
+  return { A, deco: sprite, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
 })();
 
 // ============================== Logic (pièces, créatures, stats) ==============================
@@ -1270,7 +1270,7 @@ Scenes.atelier = {
     S.creatures.push(cr); Logic.autoPlace(cr);
     S.draft = { parts: {} };
     S.best.made++;
-    S.best.creatures.unshift({ name: cr.name, parts: Object.keys(cr.parts).reduce((o, k) => (o[k] = { k: cr.parts[k].k, r: cr.parts[k].r }, o), {}), recipe: st.recipe ? st.recipe.id : null, hp: st.hp, str: st.str, mag: st.mag });
+    S.best.creatures.unshift({ name: cr.name, parts: Object.keys(cr.parts).reduce((o, k) => (o[k] = { k: cr.parts[k].k, r: cr.parts[k].r }, o), {}), recipe: st.recipe ? st.recipe.id : null, hp: st.hp, str: st.str, mag: st.mag, spd: st.spd, def: st.def });
     if (S.best.creatures.length > 30) S.best.creatures.length = 30;
     if (st.recipe && !S.best.recipes[st.recipe.id]) { S.best.recipes[st.recipe.id] = 1; this.newRecipe = st.recipe.id; }
     this.card = { cr, st };
@@ -1289,10 +1289,10 @@ Scenes.atelier = {
     if (S.tuto === 3) {
       const i = Logic.invSorted('all').findIndex(p => D.pieces[p.k].slot === 'arm');
       const cx = 6 + Math.floor(Math.max(0, i) / 2) * CELL + CELL / 2, cy = DRAWER_Y + 30 + (Math.max(0, i) % 2) * CELL + CELL / 2;
-      Hint.show(t('tuto_drag'), cx, cy, { dragTo: { x: ALT.arm0.x, y: ALT.arm0.y }, boxY: 410 });
+      Hint.show(t('tuto_drag'), cx, cy, { dragTo: { x: ALT.arm0.x, y: ALT.arm0.y }, boxY: 474 });
     } else if (S.tuto === 4) {
       const s = this.activeSeam(); if (!s) return; const pts = this.seamPath(s);
-      Hint.show(t('tuto_sew'), pts[0][0], pts[0][1], { dragTo: { x: pts[pts.length - 1][0], y: pts[pts.length - 1][1] }, boxY: 410 });
+      Hint.show(t('tuto_sew'), pts[0][0], pts[0][1], { dragTo: { x: pts[pts.length - 1][0], y: pts[pts.length - 1][1] }, boxY: 474 });
     } else if (S.tuto === 5) Hint.show(t('tuto_lever'), LEVER.x, LEVER.y0, { dragTo: { x: LEVER.x, y: LEVER.y1 }, boxY: 430 });
     else if (S.tuto === 6) Hint.show(t('tuto_back'), 28, 28, { boxY: 110 });
     void inv;
@@ -1731,7 +1731,7 @@ Scenes.atelier = {
     } else txt(t('relics'), W / 2, y + 14, 12, C.legend);
     const list = this.list();
     ctx.save(); ctx.beginPath(); ctx.rect(4, y + 28, W - 8, CELL * 2 + 4); ctx.clip();
-    if (!list.length) txt(t('drawer_empty'), W / 2, y + 28 + CELL, 13, C.dim);
+    if (!list.length) txt(this.titan ? t('titan_all_placed') : t('drawer_empty'), W / 2, y + 28 + CELL, 13, C.dim);
     list.forEach((p, i) => {
       const col = Math.floor(i / 2), row = i % 2, x = 6 + col * CELL - this.scroll, cy = y + 30 + row * CELL;
       if (x < -CELL || x > W) return;
@@ -2310,7 +2310,8 @@ Scenes.crypt = {
     // torches
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
       const y = ROOM_TOP[r] + 40, f = Math.sin(time * 10 + i * 2) * 1.5;
-      Art.glowAt(x, y, 40, 'rgba(125,255,74,0.16)');
+      Art.glowAt(x, y, 40 + f * 2, 'rgba(125,255,74,0.16)');
+      if (Art.deco('deco_torch', x, y + 2, 34)) return;
       ctx.fillStyle = '#4a3a2a'; ctx.fillRect(x - 2, y, 4, 12);
       ctx.fillStyle = C.toxic; ctx.beginPath(); ctx.ellipse(x + f * 0.3, y - 4, 4, 8 + f, 0, 0, 7); ctx.fill();
       ctx.fillStyle = '#e6ffd0'; ctx.beginPath(); ctx.ellipse(x, y - 2, 2, 4, 0, 0, 7); ctx.fill();
@@ -2360,7 +2361,8 @@ Scenes.crypt = {
   },
   drawPhylactery() {
     const x = 326, y = FLOOR[2] - 30, hp = this.run ? this.run.hp : D.cryptHp;
-    Art.glowAt(x, y, 34 + Math.sin(time * 3) * 4, 'rgba(125,255,74,0.4)');
+    Art.glowAt(x, y, 34 + Math.sin(time * 3) * 4, hp > 3 ? 'rgba(125,255,74,0.4)' : 'rgba(255,90,50,0.5)');
+    if (Art.deco('deco_crystal', x, y + 2, 66)) return;
     ctx.fillStyle = C.stoneD; ctx.fillRect(x - 14, y + 18, 28, 14); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(x - 14, y + 18, 28, 14);
     ctx.beginPath(); ctx.moveTo(x, y - 24); ctx.lineTo(x + 13, y); ctx.lineTo(x, y + 18); ctx.lineTo(x - 13, y); ctx.closePath();
     ctx.fillStyle = hp > 3 ? C.toxic : '#ff6a3a'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -2494,6 +2496,7 @@ function graveyard(y) {
   for (let x = 0; x <= W; x += 30) ctx.lineTo(x, y + Math.sin(x * 0.05) * 8);
   ctx.lineTo(W, H); ctx.fill();
   [[40, 0], [110, 1], [250, 0], [320, 1]].forEach(([x, k]) => {
+    if (Art.deco(k ? 'deco_cross' : 'deco_tomb', x, y - 14, 44)) return;
     ctx.fillStyle = '#1c1426'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
     if (k) { ctx.fillRect(x - 3, y - 34, 6, 30); ctx.fillRect(x - 12, y - 26, 24, 6); ctx.strokeRect(x - 3, y - 34, 6, 30); }
     else { rr(x - 12, y - 30, 24, 32, 10); ctx.fill(); ctx.stroke(); }
@@ -2524,8 +2527,10 @@ Scenes.menu = {
     bgNight();
     // lune
     Art.glowAt(305, 190, 60, 'rgba(200,255,180,0.15)');
-    ctx.fillStyle = '#e8f5d8'; ctx.beginPath(); ctx.arc(305, 190, 24, 0, 7); ctx.fill();
-    ctx.fillStyle = '#1b0f2c'; ctx.beginPath(); ctx.arc(316, 183, 21, 0, 7); ctx.fill();
+    if (!Art.deco('deco_moon', 305, 190, 60)) {
+      ctx.fillStyle = '#e8f5d8'; ctx.beginPath(); ctx.arc(305, 190, 24, 0, 7); ctx.fill();
+      ctx.fillStyle = '#1b0f2c'; ctx.beginPath(); ctx.arc(316, 183, 21, 0, 7); ctx.fill();
+    }
     graveyard(330);
     Art.glowAt(180, 250, 120, 'rgba(125,255,74,0.18)');
     Art.creature(DEMO, 180, 240, 52, { t: time });
@@ -2586,6 +2591,7 @@ Scenes.map = {
     if (this.sel) this.drawInfo();
   },
   drawCathedral(x, y) {
+    if (Art.img('deco_castle')) { Art.glowAt(x, y + 10, 30, S.titan ? 'rgba(125,255,74,0.4)' : 'rgba(255,240,180,0.35)'); Art.deco('deco_castle', x, y, 92); return; }
     ctx.fillStyle = '#2a2440'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x - 30, y + 30); ctx.lineTo(x - 30, y - 10); ctx.lineTo(x - 18, y - 40); ctx.lineTo(x - 6, y - 10); ctx.lineTo(x + 6, y - 10); ctx.lineTo(x + 18, y - 40); ctx.lineTo(x + 30, y - 10); ctx.lineTo(x + 30, y + 30); ctx.closePath(); ctx.fill(); ctx.stroke();
     Art.glowAt(x, y + 10, 20, S.titan ? 'rgba(125,255,74,0.4)' : 'rgba(255,240,180,0.5)');
@@ -2711,7 +2717,7 @@ Scenes.bestiary = {
         panel(8, y, 344, rh - 8, C.panel, 10);
         Art.creature(c.parts, 50, y + 26, 18, { still: true, noGlow: true });
         txt(c.name, 96, y + 20, 15, c.recipe ? C.legend : C.text, 'left');
-        txt(t('st_hp') + ' ' + c.hp + '  ' + t('st_str') + ' ' + c.str + '  ' + t('st_mag') + ' ' + c.mag, 96, y + 42, 11, C.dim, 'left', { stroke: false });
+        txt(['hp', 'str', 'mag', 'spd', 'def'].filter(k => c[k] !== undefined).map(k => t('st_' + k) + ' ' + Math.round(c[k])).join('  '), 96, y + 42, 11, C.dim, 'left', { stroke: false });
         if (c.recipe) txt(t('rc_' + c.recipe), 96, y + 56, 10, C.legend, 'left', { stroke: false });
       });
     } else if (this.tab === 1) {
@@ -2968,6 +2974,13 @@ function frame(now) {
   } catch (e) { console.error(e); }
   requestAnimationFrame(frame);
 }
+function bandFill(x, y, w, h) {
+  if (w <= 0 || h <= 0) return;
+  ctx.fillStyle = '#0a0612'; ctx.fillRect(x, y, w, h);
+  const bgi = Art.img('bg_crypt');
+  if (bgi) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.globalAlpha = 0.18; const k = Math.max(w / bgi.naturalWidth, h / bgi.naturalHeight, cv.height / bgi.naturalHeight / 2); ctx.drawImage(bgi, x, y, bgi.naturalWidth * k, bgi.naturalHeight * k); ctx.restore(); }
+  const g = ctx.createLinearGradient(0, y, 0, y + Math.min(h, 40)); g.addColorStop(0, 'rgba(0,0,0,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, w, Math.min(h, 40));
+}
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#07040b'; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -2980,6 +2993,15 @@ function render() {
   if (FX.flash > 0) { ctx.fillStyle = 'rgba(220,255,200,' + (FX.flash * 0.5) + ')'; ctx.fillRect(0, 0, W, H); }
   if (fade.t > 0) { ctx.fillStyle = 'rgba(7,4,11,' + fade.t + ')'; ctx.fillRect(0, 0, W, H); }
   ctx.restore();
+  // écrans plus hauts/larges que 9:16 : on prolonge les bords de la scène au lieu de bandes noires
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const ox = Math.round(view.dpr * view.ox), oy = Math.round(view.dpr * view.oy), gw = Math.round(W * k), gh = Math.round(H * k);
+  if (oy > 1) {
+    // haut : la barre de titre se prolonge ; bas : fond sombre texturé
+    ctx.drawImage(cv, ox, oy + 1, gw, 2, ox, 0, gw, oy + 1);
+    bandFill(0, oy + gh, cv.width, cv.height - oy - gh);
+  }
+  if (ox > 1) { bandFill(0, 0, ox, cv.height); bandFill(ox + gw, 0, cv.width - ox - gw, cv.height); }
   // téléphone en paysage
   if (window.innerWidth > window.innerHeight * 1.15 && 'ontouchstart' in window) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
