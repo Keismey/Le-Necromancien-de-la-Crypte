@@ -2309,7 +2309,14 @@ Scenes.crypt = {
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
       const y = ROOM_TOP[r] + 44, f = Math.sin(time * 10 + i * 2) * 1.5;
       Art.glowAt(x, y - 8, 52 + f * 3, 'rgba(125,255,74,0.22)');
-      if (Art.deco('deco_torch', x, y - 4, 52)) return;
+      if (animDeco('deco_torch', x, y - 4, 52, 0.34, i, (tt, lit) => {
+        ctx.transform(1, 0, Math.sin(tt * 7) * 0.08, 1, 0, 0);
+        ctx.scale(1 + Math.sin(tt * 13) * 0.05, 1 + Math.sin(tt * 9) * 0.1 + Math.sin(tt * 23) * 0.04);
+        lit(0.15 + 0.2 * Math.abs(Math.sin(tt * 11)));
+      })) {
+        if (Math.random() < 0.04 && FX.parts.length < 200) FX.parts.push({ x: x + rnd(-3, 3), y: y - 26, vx: rnd(-8, 8), vy: -30, life: 0.7, t: 0, col: C.toxic, r: 1.6, g: -10 });
+        return;
+      }
       ctx.fillStyle = '#5a4030'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.lineTo(x + 6, y - 4); ctx.lineTo(x + 3, y + 16); ctx.lineTo(x - 3, y + 16); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#3a3440'; ctx.fillRect(x - 8, y - 6, 16, 4); ctx.strokeRect(x - 8, y - 6, 16, 4);
@@ -2389,7 +2396,10 @@ Scenes.crypt = {
   drawPhylactery() {
     const x = 326, y = FLOOR[2] - 30, hp = this.run ? this.run.hp : D.cryptHp;
     Art.glowAt(x, y, 34 + Math.sin(time * 3) * 4, hp > 3 ? 'rgba(125,255,74,0.4)' : 'rgba(255,90,50,0.5)');
-    if (Art.deco('deco_crystal', x, y + 2, 66)) return;
+    if (animDeco('deco_crystal', x, y + 2, 66, 0.69, 0, (tt, lit) => {
+      ctx.translate(0, Math.sin(tt * 2) * 2.5 - 2);
+      lit(hp > 3 ? 0.1 + 0.25 * (0.5 + 0.5 * Math.sin(tt * 3)) : 0.3 + 0.3 * Math.abs(Math.sin(tt * 8)), hp > 3 ? null : 'rgba(255,70,40,0.9)');
+    })) return;
     ctx.fillStyle = C.stoneD; ctx.fillRect(x - 14, y + 18, 28, 14); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(x - 14, y + 18, 28, 14);
     ctx.beginPath(); ctx.moveTo(x, y - 24); ctx.lineTo(x + 13, y); ctx.lineTo(x, y + 18); ctx.lineTo(x - 13, y); ctx.closePath();
     ctx.fillStyle = hp > 3 ? C.toxic : '#ff6a3a'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -2507,6 +2517,28 @@ Scenes.crypt = {
 };
 
 // ============================== Scène : Menu ==============================
+// décor en image dont le haut (flamme, cristal) est animé : anim(t, lit) déforme le haut, lit(a, teinte) l'illumine
+const animTint = document.createElement('canvas');
+function animDeco(k, x, y, size, split, seed, anim) {
+  const im = Art.img(k); if (!im) return false;
+  const iw = im.naturalWidth, ih = im.naturalHeight, s = size / Math.max(iw, ih), w = iw * s, h = ih * s, y0 = y - h / 2, sh = ih * split, hh = sh * s;
+  ctx.drawImage(im, 0, sh - 1, iw, ih - sh + 1, x - w / 2, y0 + hh - s, w, h - hh + s);
+  ctx.save(); ctx.translate(x, y0 + hh);
+  let glow = 0, tint = null;
+  anim(time + seed * 1.7, (a, c) => { glow = a; tint = c; });
+  ctx.drawImage(im, 0, 0, iw, sh, -w / 2, -hh, w, hh);
+  if (glow > 0) {
+    let src = im;
+    if (tint) {
+      animTint.width = iw; animTint.height = Math.ceil(sh); const g = animTint.getContext('2d');
+      g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, iw, sh); g.drawImage(im, 0, 0);
+      g.globalCompositeOperation = 'source-atop'; g.fillStyle = tint; g.fillRect(0, 0, iw, sh); src = animTint;
+    }
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, glow);
+    ctx.drawImage(src, 0, 0, iw, sh, -w / 2, -hh, w, hh);
+  }
+  ctx.restore(); return true;
+}
 function bgNight(top, bot) {
   const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, top || '#1d1030'); g.addColorStop(1, bot || '#0a0510');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
