@@ -1517,6 +1517,8 @@ Scenes.atelier = {
     }
     if (this.vial) {
       const v = this.vial; this.vial = null;
+      // simple appui sur une fiole : afficher ce qu'elle fait
+      if (!v.target && Math.hypot(p.x - v.ax, p.y - v.ay) < 10) { this.info = { fluid: v.type, t: time }; Sfx.play('tap'); return; }
       const doses = Math.floor(v.fill);
       if (v.target && doses >= 1) this.inoculate(v.target, v.type, doses);
       return;
@@ -1816,7 +1818,14 @@ Scenes.atelier = {
   drawStats() {
     const y = 436;
     panel(6, y, 348, 34, 'rgba(36,22,58,0.9)', 8);
-    if (this.info && time - this.info.t < 4) {
+    if (this.info && this.info.fluid && time - this.info.t < 5) {
+      const f = this.info.fluid;
+      txt(t('fl_' + f), 14, y + 10, 12, D.fluids[f].color, 'left');
+      txt(t('fld_' + f), 346, y + 10, 10, C.bone, 'right', { stroke: false });
+      txt(t('fl_info', { n: this.doseCost(f) || D.doseCost[f], m: t('mut_' + f) }), 14, y + 25, 10, C.dim, 'left', { stroke: false });
+      return;
+    }
+    if (this.info && this.info.p && time - this.info.t < 4) {
       const p = this.info.p, st = Logic.pieceStats(p);
       txt(Logic.pieceName(p), 14, y + 10, 12, [C.text, C.rare, C.legend][p.r], 'left');
       txt(t('rar_' + p.r) + (p.fl ? ' · ' + t('fl_' + p.fl.t) + ' ×' + p.fl.d : '') + (p.q ? ' · ' + t('q_' + (p.q >= 1.2 ? 'perfect' : p.q >= 1 ? 'good' : 'bad')) : ''), 346, y + 10, 10, C.dim, 'right');
@@ -1826,7 +1835,7 @@ Scenes.atelier = {
     const P = this.parts;
     if (!Object.keys(P).some(k => P[k])) { txt(t('altar_empty'), W / 2, y + 17, 12, C.dim); return; }
     const st = Logic.stats(P);
-    const vals = [['hp', this.target ? Math.max(0, st.hp - (this.target.dmg || 0)) + '/' + st.hp : st.hp], ['str', st.str], ['mag', st.mag], ['spd', st.spd], ['def', st.def]];
+    const vals = [['hp', this.target ? Math.round(Math.max(0, st.hp - (this.target.dmg || 0))) + '/' + Math.round(st.hp) : Math.round(st.hp)], ['str', st.str], ['mag', st.mag], ['spd', st.spd], ['def', st.def]];
     vals.forEach((v, i) => { const x = 12 + i * 46 + (i ? 22 : 0); txt(t('st_' + v[0]), x, y + 10, 10, C.dim, 'left', { stroke: false }); txt(String(v[1]), x, y + 24, 13, C.text, 'left'); });
     const tags = [];
     if (st.recipe) tags.push(t('rc_' + st.recipe.id));
