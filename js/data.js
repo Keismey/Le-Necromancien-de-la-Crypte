@@ -86,7 +86,7 @@ window.GAME_DATA = {
     paladin: { hp: 100, str: 8,  mag: 0, def: 35, move: 24, rate: 1.7, range: 20, darkResist: 0.5 }
   },
   // multiplicateurs des héros par nuit n : 1 + a·(n-1) + b·(n-1)² (la courbe se raidit en fin de partie)
-  heroHp: [0.12, 0.07], heroDmg: [0.07, 0.04],
+  heroHp: [0.12, 0.07], heroDmg: [0.07, 0.05],
   waveCount: [4, 2, 0.15],          // héros par vague : base + a·n + b·n²
   elite: { hpMul: 3, dmgMul: 1.5, size: 1.3 },
 

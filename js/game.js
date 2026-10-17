@@ -440,7 +440,7 @@ const Toast = {
   show(s, col) { this.list.push({ s, col: col || C.text, t: 2.4 }); if (this.list.length > 3) this.list.shift(); },
   update(dt) { this.list.forEach(m => m.t -= dt); this.list = this.list.filter(m => m.t > 0); },
   draw() {
-    let y = 102;
+    let y = scene && scene.toastY ? scene.toastY() : 102; // la carte place ses messages en bas pour ne pas masquer les dernières nuits
     this.list.forEach(m => {
       const a = Math.min(1, m.t * 2), lines = wrap(m.s, 300, 14);
       ctx.globalAlpha = a; ctx.font = font(14);
@@ -938,7 +938,7 @@ const Art = (function () {
       c.save(); c.translate(x, y); if (o.flip) c.scale(-1, 1); c.rotate(lean); if (o.alpha !== undefined) c.globalAlpha *= o.alpha;
       c.drawImage(im, -w / 2, -h - bob, w, h);
       c.restore();
-      if (o.hurt) tinted(x, y + 2, w * 1.6, h * 1.3, 'rgba(255,50,50,0.55)', () => { c.save(); if (o.flip) c.scale(-1, 1); c.rotate(lean); c.drawImage(im, -w / 2, -h - bob - 2, w, h); c.restore(); });
+      if (o.hurt) tinted(x, y + 2, w * 1.6, h * 1.3, 'rgba(255,70,60,' + (0.6 * o.hurt).toFixed(2) + ')', () => { c.save(); if (o.flip) c.scale(-1, 1); c.rotate(lean); c.drawImage(im, -w / 2, -h - bob - 2, w, h); c.restore(); });
       return;
     }
     c.save(); c.translate(x, y); c.scale(size, size); if (o.flip) c.scale(-1, 1);
@@ -1978,6 +1978,8 @@ const POST_X = [[132, 250], [232, 112], [118, 232]];
 const ROOM_DIR = [1, -1, 1];
 // recul minimal : un héros repoussé reste à portée des créatures (bord gauche de l'étage 1 à x≈26)
 // Marge d'entrée : un héros repoussé ne recule pas jusqu'au bord par où arrivent les suivants (le combat reste visible)
+const HERO_IN = 30, UNIT_IN = 52; // distances au bord d'entrée de l'étage (héros qui frappent / créatures)
+const entryDist = (room, x) => ROOM_DIR[room] > 0 ? x - 8 : W - 8 - x;
 const PUSH_MIN_S = 40, ENTRY_MARGIN = 72, HOLD_LEASH = 36, RIPOSTE_LEASH = 100, RANGED_STOP = 70; // tireurs : s'approchent à 70 px pour tirer (combat au milieu de l'écran)
 function pushBack(h, d) {
   const floor = h.room >= 0 ? ROOM_S0[h.room] + ENTRY_MARGIN + (h.room === 0 ? 14 : 0) : PUSH_MIN_S;
@@ -2122,12 +2124,12 @@ Scenes.crypt = {
   },
   hitCreature(u, d, melee) {
     if (u.dead) return;
-    if (u.st.mut.soul && Math.random() < 0.4) { FX.text(u.x, FLOOR[u.room] - 50, t('dodge'), C.dim, 11); return; }
-    if (melee && u.st.fly && Math.random() < 0.25) { FX.text(u.x, FLOOR[u.room] - 50, t('dodge'), C.dim, 11); return; }
+    if (u.st.mut.soul && Math.random() < 0.4) { FX.text(u.x, FLOOR[u.room] - 62 * UNIT_K, t('dodge'), C.dim, 11); return; }
+    if (melee && u.st.fly && Math.random() < 0.25) { FX.text(u.x, FLOOR[u.room] - 62 * UNIT_K, t('dodge'), C.dim, 11); return; }
     const c = u.cr;
     if (u.hold && Math.abs(u.x - u.post) < 40) d *= D.holdDef; // la créature de tête tient la ligne : moins de dégâts à son poste
     c.dmg = (c.dmg || 0) + d; u.hurt = 0.15;
-    FX.text(u.x + rnd(-6, 6), FLOOR[u.room] - 55, '-' + Math.round(d), '#ff8a8a', 12);
+    FX.text(u.x + rnd(-6, 6), FLOOR[u.room] - 62 * UNIT_K, '-' + Math.round(d), '#ff8a8a', 12);
     // membre instable (surdose de sang) : perdu au premier coup
     if (u.st.mut.blood && !u.extraLost) { u.extraLost = true; u.st.str = Math.max(1, u.st.str - 5); FX.spark(u.x, FLOOR[u.room] - 30, C.red, 8); }
     // lien fragile
@@ -2137,7 +2139,7 @@ Scenes.crypt = {
       this.lost.push(pc);
       const oldMax = u.st.hp; u.st = Logic.stats(c.parts); c.dmg = Math.max(0, c.dmg - (oldMax - u.st.hp));
       this.drops.push({ p: pc, x: u.x, y: FLOOR[u.room] - 40, vy: -120, vx: rnd(-50, 50), ground: FLOOR[u.room] - 6, t: 0, lost: true });
-      FX.text(u.x, FLOOR[u.room] - 70, t('limb_lost'), '#ffb030', 13); Sfx.play('bone');
+      FX.text(u.x, FLOOR[u.room] - 76 * UNIT_K, t('limb_lost'), '#ffb030', 13); Sfx.play('bone');
     }
     if (c.dmg >= u.st.hp) this.creatureFalls(u);
   },
@@ -2154,9 +2156,9 @@ Scenes.crypt = {
   },
   hitHero(h, d, u, kind) {
     if (h.dead) return;
-    if (h.dodge && Math.random() < h.dodge) { FX.text(h.x, h.y - h.size - 8, t('dodge'), C.dim, 11); return; }
+    if (h.dodge && Math.random() < h.dodge) { FX.text(h.x + (h.vdx || 0), h.y + (h.lane || 0) - h.size * UNIT_K - 8, t('dodge'), C.dim, 11); return; }
     h.hp -= d; h.hurt = 0.15;
-    FX.text(h.x + rnd(-6, 6), h.y - h.size - 6, '-' + Math.round(d), kind === 'crit' ? C.gold : '#fff', kind === 'crit' ? 15 : 12);
+    FX.text(h.x + (h.vdx || 0) + rnd(-6, 6), h.y + (h.lane || 0) - h.size * UNIT_K - 6, '-' + Math.round(d), kind === 'crit' ? C.gold : '#fff', kind === 'crit' ? 15 : 12);
     if (kind === 'crit' || d >= h.maxHp * 0.3) FX.hitStop(0.05);
     if (h.hp <= 0) this.heroDies(h);
   },
@@ -2194,7 +2196,7 @@ Scenes.crypt = {
     if (fx.poison) h.poison = { dps: 2 * fx.poison + u.st.str * 0.05, t: 4 };
     if (fx.fire) h.burn = { dps: 1.5 * fx.fire + u.st.str * 0.05, t: 3 };
     if (fx.ice) { h.slow = 2; h.slowK = Math.min(0.6, 0.25 * fx.ice); }
-    if (u.st.stun && Math.random() < u.st.stun) { h.stun = Math.max(h.stun, 1); FX.text(h.x, h.y - h.size - 18, '★', C.gold, 14); }
+    if (u.st.stun && Math.random() < u.st.stun) { h.stun = Math.max(h.stun, 1); FX.text(h.x + (h.vdx || 0), h.y + (h.lane || 0) - h.size * UNIT_K - 18, '★', C.gold, 14); }
     if (u.st.push) pushBack(h, 18);
     if (u.st.splash) this.heroes.forEach(o => { if (o !== h && !o.dead && o.room === h.room && Math.abs(o.x - h.x) < 50) this.hitHero(o, d * u.st.splash, u); });
     if (fx.lightning) {
@@ -2273,6 +2275,7 @@ Scenes.crypt = {
         if (Math.abs(u.x - u.post) > 2) { u.x += Math.sign(u.post - u.x) * spd * dt; u.flip = u.post > u.x; } else u.flip = ROOM_DIR[u.room] < 0;
       }
       u.x = clamp(u.x, 22, 338);
+      if (entryDist(u.room, u.x) < UNIT_IN) u.x = ROOM_DIR[u.room] > 0 ? 8 + UNIT_IN : W - 8 - UNIT_IN; // ne pas aller chercher les héros contre le bord d'entrée
     });
     // héros
     alive.forEach(h => {
@@ -2298,7 +2301,7 @@ Scenes.crypt = {
       const taunt = units.find(u => u.st.taunt && Math.abs(u.x - h.x) < 120);
       if (h.range > 40) { let bd = 1e9; const rg = Math.min(h.range, RANGED_STOP); units.forEach(u => { const d = Math.abs(u.x - h.x); if (d <= rg && d < bd) { bd = d; tg = u; } }); if (taunt && Math.abs(taunt.x - h.x) <= h.range) tg = taunt; }
       else { tg = (taunt && (taunt.x - h.x) * dir > -12 && (taunt.x - h.x) * dir < h.range + 10) ? taunt : units.find(u => (u.x - h.x) * dir > -12 && (u.x - h.x) * dir < h.range + 10); }
-      if (h.room === 0 && h.x < 24) tg = null; // à l'entrée, hors de portée des créatures : il avance d'abord
+      if (h.room >= 0 && entryDist(h.room, h.x) < HERO_IN) tg = null; // à l'entrée de l'étage, il avance d'abord : on se bat en plein écran, jamais contre le bord
       if (tg) {
         h.cd -= dt;
         if (h.cd <= 0) {
@@ -2343,9 +2346,9 @@ Scenes.crypt = {
     if (type === 'brasero') this.zones.push({ room: i, x, t: tp.dur, dps: tp.burn * mul });
     this.heroes.forEach(h => {
       if (h.dead || h.room !== i || Math.abs(h.x - x) > D.trapZone) return;
-      if (h.disarm) { h.trapHits++; if (h.trapHits % h.disarm === 0) { disarmed = true; FX.text(h.x, h.y - h.size - 14, t('disarmed'), '#ffd27a', 13); return; } }
-      if (type === 'spikes') { if (h.ignoreLight) { FX.text(h.x, h.y - h.size - 14, t('ignored'), C.dim, 12); return; } this.hitHero(h, tp.dmg * mul); }
-      if (type === 'trapdoor') { h.stun = Math.max(h.stun, tp.stun); FX.text(h.x, h.y - h.size - 14, t('trapped'), C.toxic, 12); }
+      if (h.disarm) { h.trapHits++; if (h.trapHits % h.disarm === 0) { disarmed = true; FX.text(h.x + (h.vdx || 0), h.y + (h.lane || 0) - h.size * UNIT_K - 14, t('disarmed'), '#ffd27a', 13); return; } }
+      if (type === 'spikes') { if (h.ignoreLight) { FX.text(h.x + (h.vdx || 0), h.y + (h.lane || 0) - h.size * UNIT_K - 14, t('ignored'), C.dim, 12); return; } this.hitHero(h, tp.dmg * mul); }
+      if (type === 'trapdoor') { h.stun = Math.max(h.stun, tp.stun); FX.text(h.x + (h.vdx || 0), h.y + (h.lane || 0) - h.size * UNIT_K - 14, t('trapped'), C.toxic, 12); }
       if (type === 'coffin') { this.hitHero(h, tp.dmg * mul); pushBack(h, tp.push); }
     });
     if (disarmed) this.trapCd[i] *= 2;
@@ -2649,10 +2652,10 @@ Scenes.crypt = {
     ctx.save(); ctx.globalAlpha = 0.85; ctx.strokeStyle = tagOf(c); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(u.x, fy + 1, 15 * UNIT_K, 4.5, 0, 0, 7); ctx.stroke(); ctx.restore();
     const co = { t: time, seed: u.seed, flip: !u.flip, atk: u.atk > 0 ? 1 - u.atk : 0, ghost: u.st.mut.soul, noGlow: true }, cy = fy - foot * size - 1;
     Art.creature(c.parts, u.x, cy, size, co);
-    if (u.hurt > 0) Art.tinted(u.x, fy + 4, size * 4, size * 4, 'rgba(255,50,50,0.55)', () => Art.creature(c.parts, 0, cy - fy - 4, size, co));
+    if (u.hurt > 0) Art.tinted(u.x, fy + 4, size * 4, size * 4, 'rgba(255,70,60,' + (0.6 * u.hurt / 0.15).toFixed(2) + ')', () => Art.creature(c.parts, 0, cy - fy - 4, size, co));
     if (u.stun > 0) txt('✦', u.x, fy - foot * size - size * 1.3, 12, C.gold);
     const hp = Math.max(0, u.st.hp - c.dmg), k = hp / u.st.hp;
-    if (k < 1) { const y = fy - foot * size - size * 1.25; ctx.fillStyle = '#300'; ctx.fillRect(u.x - 16, y, 32, 4); ctx.fillStyle = k > 0.5 ? C.toxic : k > 0.25 ? '#e0b030' : C.red; ctx.fillRect(u.x - 16, y, 32 * k, 4); }
+    if (k < 1) { const y = fy - foot * size - size * 1.25; ctx.fillStyle = tagOf(c); ctx.fillRect(u.x - 17.5, y - 1.5, 35, 7); ctx.fillStyle = '#300'; ctx.fillRect(u.x - 16, y, 32, 4); ctx.fillStyle = k > 0.5 ? C.toxic : k > 0.25 ? '#e0b030' : C.red; ctx.fillRect(u.x - 16, y, 32 * k, 4); }
   },
   // Affichage seulement : les héros arrêtés au même endroit se rangent en file au lieu de se fondre en un paquet
   layoutHeroes() {
@@ -2671,7 +2674,7 @@ Scenes.crypt = {
     const hs = h.size * UNIT_K, X = h.x + (h.vdx || 0), Y = h.y + (h.lane || 0); // position d'affichage (file d'attente lisible)
     if (h.dead) { ctx.globalAlpha = Math.max(0, (h.deadT || 0) * 2); }
     const dir = ROOM_DIR[h.room] || (h.room === -1 ? 1 : 1);
-    Art.hero(h.type, X, Y, hs, { t: h.t, walk: !h.stun && !h.atk, flip: dir < 0, atk: h.atk > 0 ? 1 - h.atk : 0, hurt: h.hurt > 0 });
+    Art.hero(h.type, X, Y, hs, { t: h.t, walk: !h.stun && !h.atk, flip: dir < 0, atk: h.atk > 0 ? 1 - h.atk : 0, hurt: h.hurt > 0 ? h.hurt / 0.15 : 0 });
     ctx.globalAlpha = 1;
     if (h.dead) return;
     if (h.elite && !h.boss) Art.glowAt(X, Y - hs * 0.5, hs * 0.7, 'rgba(74,168,255,0.25)');
@@ -2883,8 +2886,9 @@ Scenes.splash = {
       if (p > 0) { rr(82, H - 78, 196 * p, 8, 4); ctx.fillStyle = C.toxic; ctx.fill(); }
       txt(t('loading'), W / 2, H - 50, 12, C.dim);
     } else {
-      ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin((this.t - this.readyT) * 3.5));
-      txt(t('tap_start'), W / 2, H - 68, 18, C.bone, 'center', { sw: 5 });
+      const pu = Math.sin((this.t - this.readyT) * 3.5); // pulsation douce : le texte reste toujours lisible
+      ctx.globalAlpha = a * (0.8 + 0.2 * pu);
+      txt(t('tap_start'), W / 2, H - 68, 18 + pu * 0.8, C.bone, 'center', { sw: 5 });
       ctx.globalAlpha = a;
       txt('v' + PN[0].v + ' · ' + t('tap_notes'), W / 2, H - 20, 11, 'rgba(236,224,195,0.7)', 'center', { sw: 3 });
     }
@@ -2930,6 +2934,17 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.6', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['Les combats se déroulent en plein écran : plus de héros à moitié coupés contre le bord d\'entrée de l\'étage.',
+      'Le flash des coups est un éclat rouge qui s\'estompe, au lieu d\'une silhouette toute rouge.',
+      'La barre de vie d\'une créature est encadrée de sa couleur : on ne la confond plus avec celle d\'un héros.',
+      'Les chiffres de dégâts s\'affichent au-dessus des têtes, même sur les grands écrans.',
+      'Sur la carte, les messages s\'affichent en bas et ne cachent plus la cathédrale. « Touche pour commencer » reste toujours lisible.'],
+    en: ['Fights now play out in full view: no more heroes half cut off against the floor\'s entry edge.',
+      'Hit flashes are a fading red glint instead of an all-red silhouette.',
+      'A creature\'s health bar is framed in its colour, so it is no longer mistaken for a hero\'s.',
+      'Damage numbers appear above heads, even on tall screens.',
+      'On the map, messages appear at the bottom and no longer hide the cathedral. "Tap to start" always stays readable.'] },
   { v: '1.5', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['L\'atelier occupe tout l\'écran : le tiroir affiche plus de pièces sur les téléphones allongés.',
       'Chaque créature a sa couleur, au sol pendant le combat, sur sa carte en bas et dans l\'atelier : on voit tout de suite qui est blessée.',
@@ -3033,6 +3048,7 @@ let NODES = NODES0;
 function mapLayout() { const k = (H - 128 - 120) / (512 - 120); NODES = NODES0.map(([x, y]) => [x, Math.round(120 + (y - 120) * k)]); }
 Scenes.map = {
   tall: true,
+  toastY() { return H - 170; },
   relayout() { mapLayout(); const y = H - 74; if (this.btns) this.btns.slice(1).forEach(b => { b.y = y; }); },
   enter() {
     this.sel = null; mapLayout();
@@ -3235,7 +3251,7 @@ Scenes.bestiary = {
       S.best.creatures.forEach((c, i) => {
         const y = top + 6 + i * rh - this.scroll; if (y < top - rh || y > H) return;
         panel(8, y, 344, rh - 8, C.panel, 10);
-        Art.creature(c.parts, 50, y + 26, 18, { still: true, noGlow: true });
+        Art.creature(c.parts, 50, y + 28, 21, { still: true, noGlow: true });
         txt(c.name, 96, y + 20, 15, c.recipe ? C.legend : C.text, 'left');
         txt(['hp', 'str', 'mag', 'spd', 'def'].filter(k => c[k] !== undefined).map(k => t('st_' + k) + ' ' + Math.round(c[k])).join('  '), 96, y + 42, 11, C.dim, 'left', { stroke: false });
         if (c.recipe) txt(t('rc_' + c.recipe), 96, y + 56, 10, C.legend, 'left', { stroke: false });
@@ -3338,7 +3354,7 @@ Scenes.grinder = {
     const G = this.GRID, list = this.list();
     const items = ch.map((p, i) => { const j = list.indexOf(p); return { p, x: G.x + (j % G.cols) * G.cell + G.cell / 2, y: clamp(G.y + Math.floor(j / G.cols) * G.cell - this.scroll + G.cell / 2, G.y + 10, G.y + G.h - 10), d: Math.min(i * 0.05, 0.7), spin: rnd(-8, 8) }; });
     let g = 0; ch.forEach(p => { g += D.grindSouls[p.r]; Logic.invRemove(p); });
-    S.souls += g; this.sel.clear(); this.confirm = -1e9;
+    S.souls += g; this.sel.clear(); this.confirm = -1e9; Toast.list = []; // la demande de confirmation disparaît dès qu'on broie
     this.anim = { items, t: 0, g, pend: g, end: Math.max(...items.map(it => it.d)) + 0.45, crunched: false };
     Sfx.play('tap');
     this.scroll = clamp(this.scroll, 0, this.maxScroll());
