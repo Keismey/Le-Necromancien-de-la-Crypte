@@ -2886,6 +2886,11 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.2', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['Introduction illustrée en trois cases au premier lancement : la fuite du nécromancien, la crypte, l\'arrivée des héros.',
+      'La fin se joue devant une cathédrale peinte, en plein écran, et la lumière jaillit de ses vraies portes.'],
+    en: ['An illustrated three-panel introduction on first launch: the necromancer\'s escape, the crypt, the heroes arriving.',
+      'The ending now plays in front of a painted cathedral, full screen, with light bursting from its actual doors.'] },
   { v: '1.1', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['La crypte occupe tout l\'écran des téléphones allongés : étages plus hauts, créatures et héros plus grands.',
       'Les dégâts répétés se cumulent en un seul chiffre lisible.',
@@ -3429,21 +3434,31 @@ Scenes.intro = {
 };
 
 // ---- Fin : le Titan du joueur enfonce les portes, puis générique ----
-const END_DOOR = { x: 230, y: 452 }; // bas des portes (image cathédrale : portes centrées, sol à ~70 % de la hauteur)
+const END_DOOR = { x: 230, y: 452 }; // bas des portes (dessin de repli) ; recalé sur l'illustration quand elle est chargée
 Scenes.ending = {
+  tall: true,
+  // portes de l'illustration recalculées selon le cadrage (l'image couvre tout l'écran, même allongé)
+  placeDoor() {
+    const img = Art.img('bg_cathedral'), off = OY();
+    if (!img) { Object.assign(END_DOOR, { x: 230, y: 452 + off, hw: 32, hh: 148 }); return; }
+    const k = Math.max(W / img.naturalWidth, H / img.naturalHeight), w = img.naturalWidth * k, h = img.naturalHeight * k;
+    END_DOOR.x = (W - w) / 2 + 0.775 * w; END_DOOR.y = (H - h) / 2 + 0.734 * h; END_DOOR.hw = 0.084 * w; END_DOOR.hh = 0.21 * h;
+  },
+  relayout() { this.placeDoor(); if (this.btn) this.btn.y = H - 54; },
   enter() {
     this.t = 0; this.broke = false; this.lastStep = -1;
-    this.btn = UI.btn({ x: 80, y: 586, w: 200, h: 46, label: t('free_mode'), style: 'green', on: () => go('map'), show: false });
+    this.placeDoor();
+    this.btn = UI.btn({ x: 80, y: H - 54, w: 200, h: 46, label: t('free_mode'), style: 'green', on: () => go('map'), show: false });
     Sfx.Music.set('titan'); FX.clear();
   },
   titanX() {
     const walk = clamp(this.t / 5, 0, 1);
-    return lerp(-90, 128, walk) + (this.t > 5 && this.t < 5.6 ? Math.sin((this.t - 5) / 0.6 * Math.PI) * 26 : 0);
+    return lerp(-90, END_DOOR.x - 102, walk) + (this.t > 5 && this.t < 5.6 ? Math.sin((this.t - 5) / 0.6 * Math.PI) * 26 : 0);
   },
   update(dt) {
     this.t += dt;
     const step = Math.floor(this.t / 0.8);
-    if (this.t < 5 && step !== this.lastStep) { this.lastStep = step; FX.shake(2 + step * 0.6, 0.15); Sfx.play('hit'); FX.puff(this.titanX() + 20, 456, 'rgba(120,100,140,0.5)', 5); }
+    if (this.t < 5 && step !== this.lastStep) { this.lastStep = step; FX.shake(2 + step * 0.6, 0.15); Sfx.play('hit'); FX.puff(this.titanX() + 20, END_DOOR.y + 4, 'rgba(120,100,140,0.5)', 5); }
     if (this.t > 5.4 && !this.broke) {
       this.broke = true; FX.shake(14, 1); FX.flash = 1; Sfx.play('boom');
       for (let i = 0; i < 40; i++) FX.spark(END_DOOR.x, END_DOOR.y - 60, pick(['#8a6a3a', '#ffe9a0', '#5a4030']), 2, 300, 1.4);
@@ -3482,8 +3497,10 @@ Scenes.ending = {
   },
   drawDoor() {
     const cx = END_DOOR.x, base = END_DOOR.y, a = clamp((this.t - 5.4) / 0.6, 0, 1);
-    const arch = () => { ctx.beginPath(); ctx.moveTo(cx - 32, base); ctx.lineTo(cx - 32, base - 92); ctx.quadraticCurveTo(cx - 32, base - 132, cx, base - 148); ctx.quadraticCurveTo(cx + 32, base - 132, cx + 32, base - 92); ctx.lineTo(cx + 32, base); ctx.closePath(); };
+    const hw = END_DOOR.hw || 32, hh = END_DOOR.hh || 148;
+    const arch = () => { ctx.beginPath(); ctx.moveTo(cx - hw, base); ctx.lineTo(cx - hw, base - hh * 0.62); ctx.quadraticCurveTo(cx - hw, base - hh * 0.89, cx, base - hh); ctx.quadraticCurveTo(cx + hw, base - hh * 0.89, cx + hw, base - hh * 0.62); ctx.lineTo(cx + hw, base); ctx.closePath(); };
     if (!this.broke) {
+      if (Art.img('bg_cathedral')) return; // l'illustration montre déjà les portes fermées
       // la porte tremble sous les coups
       const sh = this.t > 4.5 ? Math.sin(this.t * 60) * 1.2 : 0;
       ctx.save(); ctx.translate(sh, 0); arch(); ctx.fillStyle = '#6a4626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -3520,13 +3537,13 @@ Scenes.ending = {
     // générique (au format des autres jeux du studio)
     if (this.t > 8.4) {
       const a = clamp((this.t - 8.4) / 0.8, 0, 1);
-      ctx.globalAlpha = a; ctx.fillStyle = 'rgba(7,4,11,0.86)'; ctx.fillRect(0, 462, W, H - 462); ctx.globalAlpha = 1;
+      const cy = H - 178; ctx.globalAlpha = a; ctx.fillStyle = 'rgba(7,4,11,0.86)'; ctx.fillRect(0, cy, W, H - cy); ctx.globalAlpha = 1;
       const L = t('credits_l');
       L.forEach((line, i) => {
         const la = clamp((this.t - 8.8 - i * 0.55) / 0.6, 0, 1); if (!la) return;
         ctx.globalAlpha = la;
-        if (i === 0) { ctx.font = 'italic 700 17px ' + FONT; ctx.fillStyle = C.gold; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = C.ink; ctx.lineWidth = 4; ctx.strokeText(line, W / 2, 482 + (1 - la) * 6); ctx.fillText(line, W / 2, 482 + (1 - la) * 6); }
-        else txt(line, W / 2, 486 + i * 16 + (1 - la) * 6, 12, i === L.length - 1 ? C.toxic : C.dim);
+        if (i === 0) { ctx.font = 'italic 700 17px ' + FONT; ctx.fillStyle = C.gold; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = C.ink; ctx.lineWidth = 4; ctx.strokeText(line, W / 2, cy + 20 + (1 - la) * 6); ctx.fillText(line, W / 2, cy + 20 + (1 - la) * 6); }
+        else txt(line, W / 2, cy + 24 + i * 16 + (1 - la) * 6, 12, i === L.length - 1 ? C.toxic : C.dim);
         ctx.globalAlpha = 1;
       });
     }
