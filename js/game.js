@@ -320,7 +320,12 @@ function topBar(h) {
 function banner(title, cx, cy, size) {
   ctx.font = font(size || 18); const tw = ctx.measureText(title).width, w = Math.max(130, tw + 40), h = 32, x = cx - w / 2, y = cy - h / 2;
   const im = Art.img('ui_banner');
-  if (im) { const bh = 40, wi = tw + 124; three(im, cx - wi / 2, cy - bh / 2 - 2, wi, bh, 135); }
+  let ty = cy + 1;
+  if (im) {
+    // face avant de la banderole : y 3-66 sur 85 px, entre les deux enroulements (x 115-785 sur 900)
+    const bh = 42, wi = tw + 140, by = cy - bh / 2 - 2;
+    three(im, cx - wi / 2, by, wi, bh, 135); ty = by + bh * (34.5 / 85) + 1;
+  }
   else {
     // queues
     [-1, 1].forEach(d => {
@@ -333,7 +338,7 @@ function banner(title, cx, cy, size) {
     ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
     ctx.strokeStyle = 'rgba(236,224,195,0.45)'; ctx.lineWidth = 1.5; rr(x + 4, y + 4, w - 8, h - 8, 4); ctx.stroke();
   }
-  txt(title, cx, cy + 1, size || 18, C.text, 'center', { sw: 5 });
+  txt(title, cx, ty, size || 18, C.text, 'center', { sw: 5 });
 }
 // Compteur d'âmes dans une pastille
 function soulPill(x, y) {
