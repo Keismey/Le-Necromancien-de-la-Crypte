@@ -730,6 +730,7 @@ const Art = (function () {
     const sw = o.atk ? Math.sin(o.atk * PI) * 0.7 : Math.sin(t * 3 + (o.seed || 0)) * 0.08;
     const order = ['back', 'legs', 'arm2', 'arm3', 'torso', 'core', 'head', 'arm0', 'arm1'];
     const po = { t, noGlow: o.noGlow, eye: o.eye };
+    if (parts.torso && img(D.pieces[parts.torso.k].art)) { creatureSprites(parts, size, sw, po, order); c.restore(); return; }
     order.forEach(k => {
       const p = parts[k]; if (!p) return;
       if (k === 'torso') { piece(p, 0, 0, size, po); return; }
@@ -747,6 +748,49 @@ const Art = (function () {
     });
     if (!parts.torso) { c.globalAlpha = 0.3; drawArt('ribcage', 0, 0, size, { t }); }
     c.restore();
+  }
+
+  // ---- Créature en images : chaque pièce est accrochée à un point du torse ----
+  // ANCH : point d'attache dans l'image (fraction largeur, hauteur). Bras : épaule ; tête : cou ; jambes : bassin.
+  const ANCH = { arm: [0.5, 0.06], head: [0.5, 0.94], legs: [0.5, 0.04], back: [0.5, 0.42], core: [0.5, 0.5] };
+  function pieceAt(p, x, y, fit, dim, ax, ay, o, rot, flip) {
+    const im = img(D.pieces[p.k].art); if (!im) return;
+    const iw = im.naturalWidth, ih = im.naturalHeight;
+    const k = fit === 'w' ? dim / iw : fit === 'h' ? dim / ih : dim / Math.max(iw, ih);
+    const w = iw * k, h = ih * k;
+    if (!o.noGlow) {
+      if (p.r === 1) glowAt(x, y + (0.5 - ay) * h, Math.max(w, h) * 0.6, 'rgba(74,168,255,0.4)');
+      if (p.r === 2) glowAt(x, y + (0.5 - ay) * h, Math.max(w, h) * 0.65, 'rgba(255,182,39,0.5)');
+      if (p.fl) glowAt(x, y + (0.5 - ay) * h, Math.max(w, h) * (0.5 + p.fl.d * 0.06), hexA(D.fluids[p.fl.t].color, 0.35));
+    }
+    c.save(); c.translate(x, y); if (rot) c.rotate(rot); if (flip) c.scale(-1, 1);
+    c.drawImage(im, -w * ax, -h * ay, w, h);
+    c.restore();
+  }
+  function creatureSprites(parts, size, sw, po, order) {
+    const ti = img(D.pieces[parts.torso.k].art);
+    const th = size * 1.08, tw = Math.min(size * 1.15, ti.naturalWidth * th / ti.naturalHeight);
+    const top = -th / 2, bot = th / 2;
+    const sh = Math.max(tw * 0.4, size * 0.3);       // demi-écart des épaules
+    order.forEach(k => {
+      const p = parts[k]; if (!p) return;
+      const sl = D.pieces[p.k].slot;
+      if (k === 'torso') { pieceAt(p, 0, 0, 'h', th, 0.5, 0.5, po); return; }
+      if (k === 'head') { pieceAt(p, 0, top + size * 0.16, 'w', size * 0.64, ANCH.head[0], ANCH.head[1], po); return; }
+      if (k === 'legs') { pieceAt(p, 0, bot - size * 0.2, 'h', size * 0.98, ANCH.legs[0], ANCH.legs[1], po); return; }
+      if (k === 'back') { pieceAt(p, 0, top + th * 0.42, 'w', size * 1.75, ANCH.back[0], ANCH.back[1], po); return; }
+      if (k === 'core') { c.save(); c.globalAlpha *= 0.92; pieceAt(p, 0, size * 0.04, 'w', size * 0.36, 0.5, 0.5, po); c.restore(); return; }
+      if (sl === 'arm' || k.startsWith('arm')) {
+        const left = k === 'arm0' || k === 'arm2', low = k === 'arm2' || k === 'arm3';
+        const x = (left ? -1 : 1) * (low ? sh * 0.92 : sh), y = top + (low ? th * 0.42 : th * 0.13);
+        let rot = (left ? 1 : -1) * (low ? 0.55 : 0.12) + (left ? sw : -sw) * (low ? 0.6 : 1);
+        const ai = img(D.pieces[p.k].art);
+        if (ai && ai.naturalWidth > ai.naturalHeight * 0.9) {
+          // bras coudé (avant-bras horizontal vers la droite) : épaule en haut à gauche, avant-bras vers l'extérieur
+          pieceAt(p, x, y, 'w', size * (low ? 0.75 : 0.85), 0.12, 0.1, po, rot * 0.4, left);
+        } else pieceAt(p, x, y, 'h', size * (low ? 0.8 : 0.92), ANCH.arm[0], ANCH.arm[1], po, rot, !left);
+      }
+    });
   }
 
   // ---- Héros (pieds en x,y ; size = hauteur) ----
@@ -1473,7 +1517,7 @@ Scenes.atelier = {
       // emplacements
       this.slots().forEach(s => this.drawSlot(s, P[s]));
       // coutures
-      this.slots().forEach(s => { if (s !== 'torso' && P[s] && P[s].q !== null) this.drawStitches(s, P[s].q); });
+      // couture réussie : la couleur du fil indique la qualité (or = parfait, os = bien, rouge = raté)
       const seam = this.activeSeam();
       this.seamSlots().forEach(s => { if (s !== seam) this.drawSeam(s, false); });
       if (seam && !this.drag && !this.vial) this.drawSeam(seam, true);
@@ -1565,7 +1609,7 @@ Scenes.atelier = {
     // fil vers le torse
     if (s !== 'torso' && P0(this.parts)) {
       ctx.strokeStyle = 'rgba(30,15,40,0.8)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.j[0], a.j[1]); ctx.stroke();
-      ctx.strokeStyle = pc.q === null ? 'rgba(236,224,195,0.4)' : '#a01e2e'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = pc.q === null ? 'rgba(236,224,195,0.4)' : pc.q >= D.quality.perfect ? C.gold : pc.q >= D.quality.good ? '#c8b89a' : '#d23a4a'; ctx.lineWidth = pc.q === null ? 2 : 2.5; ctx.stroke();
     }
     const k = this.pop[s] ? clamp((time - this.pop[s]) / 0.35, 0, 1) : 1;
     const sc = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.25 : 1;
@@ -1592,9 +1636,10 @@ Scenes.atelier = {
   drawStitches(s, q) {
     const pts = this.seamPath(s);
     const col = q >= D.quality.perfect ? C.gold : q >= D.quality.good ? C.bone : '#ff6a6a';
-    ctx.strokeStyle = C.ink; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    const draw = () => { ctx.beginPath(); for (let i = 8; i <= 16; i += 2) { const a = pts[i - 1], b = pts[i + 1]; const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; const nx = -dy / l * 6, ny = dx / l * 6; ctx.moveTo(pts[i][0] - nx, pts[i][1] - ny); ctx.lineTo(pts[i][0] + nx, pts[i][1] + ny); } ctx.stroke(); };
-    ctx.globalAlpha = 0.85; draw(); ctx.strokeStyle = col; ctx.lineWidth = 2; draw(); ctx.globalAlpha = 1;
+    // points de croix fins le long du fil
+    ctx.lineCap = 'round';
+    const draw = () => { ctx.beginPath(); for (let i = 7; i <= 17; i += 2) { const a = pts[i - 1], b = pts[i + 1]; const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; const ux = dx / l * 2.5, uy = dy / l * 2.5, nx = -dy / l * 3.5, ny = dx / l * 3.5; ctx.moveTo(pts[i][0] - nx - ux, pts[i][1] - ny - uy); ctx.lineTo(pts[i][0] + nx + ux, pts[i][1] + ny + uy); ctx.moveTo(pts[i][0] - nx + ux, pts[i][1] - ny + uy); ctx.lineTo(pts[i][0] + nx - ux, pts[i][1] + ny - uy); } ctx.stroke(); };
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3; draw(); ctx.strokeStyle = col; ctx.lineWidth = 1.4; draw();
   },
   drawTrace() {
     const s = this.sew; if (s.smp.length < 2) return;
