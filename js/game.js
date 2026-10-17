@@ -213,16 +213,17 @@ const Sfx = (function () {
   // Musique procédurale (en attendant les musiques générées)
   const Music = {
     cur: null, timer: null,
-    set(name) { this.cur = name; this.apply(); },
+    // même morceau déjà en cours (carte -> crypte, crypte -> crypte) : on ne le relance pas
+    set(name) { if (name === this.cur && this.audio && !this.audio.paused) return; this.cur = name; this.apply(); },
     apply() {
       if (!ac) return;
       clearInterval(this.timer); this.timer = null;
       if (music) { try { music.forEach(n => n.stop()); } catch (_) {} music = null; }
-      if (this.audio) { this.audio.pause(); this.audio = null; }
+      if (this.audio) { const old = this.audio; this.audio = null; const f = setInterval(() => { old.volume = Math.max(0, old.volume - 0.06); if (old.volume <= 0) { old.pause(); clearInterval(f); } }, 40); setTimeout(() => { old.pause(); clearInterval(f); }, 800); } // fondu de sortie (iOS ignore volume : arrêt forcé)
       if (!S.set.music || !this.cur) return;
       const name = this.cur;
       if ((window.MUSIC_LIST || []).indexOf(name) >= 0) {
-        const a = new Audio('assets/music_' + name + '.mp3'); a.loop = true; a.volume = 0.45; this.audio = a;
+        const a = new Audio('assets/music_' + name + '.mp3'); a.loop = true; a.volume = 0.4; this.audio = a;
         a.play().catch(() => {}); return;
       }
       const base = name === 'atelier' ? 65.4 : name === 'titan' ? 73.4 : 55;
@@ -2886,6 +2887,9 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.3', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['Trois vraies musiques : la crypte, l\'atelier et la marche du Titan, avec un fondu entre les morceaux.'],
+    en: ['Three real music tracks: the crypt, the workshop and the Titan\'s march, with a fade between tracks.'] },
   { v: '1.2', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['Introduction illustrée en trois cases au premier lancement : la fuite du nécromancien, la crypte, l\'arrivée des héros.',
       'La fin se joue devant une cathédrale peinte, en plein écran, et la lumière jaillit de ses vraies portes.'],
