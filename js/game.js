@@ -2290,9 +2290,6 @@ Scenes.crypt = {
       // cadre
       c.font = 'bold 10px ' + FONT; c.fillStyle = 'rgba(165,150,191,0.35)'; c.textAlign = 'left'; c.fillText(['I', 'II', 'III'][r], 14, y + 18);
     }
-    // escaliers
-    const stairs = (x0, y0, x1, y1) => { c.strokeStyle = '#4a3d58'; c.lineWidth = 3; for (let i = 0; i <= 8; i++) { const k2 = i / 8; const x = lerp(x0, x1, k2), y = lerp(y0, y1, k2); c.beginPath(); c.moveTo(x - 10, y); c.lineTo(x + 10, y); c.stroke(); } };
-    stairs(326, FLOOR[0] + 6, 340, FLOOR[1] - 4); stairs(30, FLOOR[1] + 6, 20, FLOOR[2] - 4);
     // entrée
     c.fillStyle = '#05030a'; c.fillRect(0, FLOOR[0] - 46, 14, 46);
     return oc;
@@ -2307,14 +2304,17 @@ Scenes.crypt = {
       // assombrir pour garder les personnages lisibles
       ctx.globalAlpha = 1; const g = ctx.createLinearGradient(0, y, 0, FLOOR[r]); g.addColorStop(0, 'rgba(8,4,16,0.6)'); g.addColorStop(1, 'rgba(8,4,16,0.25)'); ctx.fillStyle = g; ctx.fillRect(8, y + 4, rw, rh); ctx.restore();
     });
+    this.drawStructure();
     // torches
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
-      const y = ROOM_TOP[r] + 40, f = Math.sin(time * 10 + i * 2) * 1.5;
-      Art.glowAt(x, y, 40 + f * 2, 'rgba(125,255,74,0.16)');
-      if (Art.deco('deco_torch', x, y + 2, 34)) return;
-      ctx.fillStyle = '#4a3a2a'; ctx.fillRect(x - 2, y, 4, 12);
-      ctx.fillStyle = C.toxic; ctx.beginPath(); ctx.ellipse(x + f * 0.3, y - 4, 4, 8 + f, 0, 0, 7); ctx.fill();
-      ctx.fillStyle = '#e6ffd0'; ctx.beginPath(); ctx.ellipse(x, y - 2, 2, 4, 0, 0, 7); ctx.fill();
+      const y = ROOM_TOP[r] + 44, f = Math.sin(time * 10 + i * 2) * 1.5;
+      Art.glowAt(x, y - 8, 52 + f * 3, 'rgba(125,255,74,0.22)');
+      if (Art.deco('deco_torch', x, y, 44)) return;
+      ctx.fillStyle = '#5a4030'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.lineTo(x + 6, y - 4); ctx.lineTo(x + 3, y + 16); ctx.lineTo(x - 3, y + 16); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#3a3440'; ctx.fillRect(x - 8, y - 6, 16, 4); ctx.strokeRect(x - 8, y - 6, 16, 4);
+      ctx.fillStyle = C.toxic; ctx.beginPath(); ctx.ellipse(x + f * 0.4, y - 14, 6, 11 + f, 0, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e6ffd0'; ctx.beginPath(); ctx.ellipse(x, y - 11, 3, 6, 0, 0, 7); ctx.fill();
     });
     // phylactère
     this.drawPhylactery();
@@ -2358,6 +2358,33 @@ Scenes.crypt = {
     if (this.drag) { const c = this.drag.c; Art.creature(c.parts, this.drag.x, this.drag.y - 30, 18, { still: true, noGlow: true }); }
     if (this.paused) this.drawPause();
     if (this.phase === 'result' || this.phase === 'lost') this.drawEnd();
+  },
+  // sols et échelles par-dessus le mur (images deco_floor / deco_ladder si présentes)
+  drawStructure() {
+    const fl = Art.img('deco_floor'), la = Art.img('deco_ladder');
+    for (let r = 0; r < 3; r++) {
+      const y = FLOOR[r];
+      if (fl) {
+        const h = 16, w = fl.naturalWidth * h / fl.naturalHeight;
+        ctx.save(); ctx.beginPath(); ctx.rect(8, y - 3, W - 16, h); ctx.clip();
+        for (let x = 8; x < W - 8; x += w - 1) ctx.drawImage(fl, x, y - 3, w, h);
+        ctx.restore(); continue;
+      }
+      ctx.fillStyle = '#4a3d58'; ctx.fillRect(8, y, W - 16, 11);
+      ctx.fillStyle = '#6e5e80'; ctx.fillRect(8, y, W - 16, 3);
+      ctx.strokeStyle = 'rgba(10,6,16,0.7)'; ctx.lineWidth = 2;
+      for (let x = 8 + (r * 13) % 34; x < W - 8; x += 34) { ctx.beginPath(); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 11); ctx.stroke(); }
+      ctx.strokeStyle = C.ink; ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(W - 8, y); ctx.stroke();
+    }
+    [[333, FLOOR[0] + 8, FLOOR[1] + 2], [25, FLOOR[1] + 8, FLOOR[2] + 2]].forEach(([x, y0, y1]) => {
+      if (la) { const w = 26; ctx.save(); ctx.beginPath(); ctx.rect(x - w, y0, w * 2, y1 - y0); ctx.clip(); const h = la.naturalHeight * w / la.naturalWidth; for (let y = y0; y < y1; y += h - 1) ctx.drawImage(la, x - w / 2, y, w, h); ctx.restore(); return; }
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 6;
+      [-9, 9].forEach(d => { ctx.beginPath(); ctx.moveTo(x + d, y0); ctx.lineTo(x + d, y1); ctx.stroke(); });
+      for (let y = y0 + 8; y < y1 - 2; y += 12) { ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x + 9, y); ctx.stroke(); }
+      ctx.strokeStyle = '#8a6440'; ctx.lineWidth = 3;
+      [-9, 9].forEach(d => { ctx.beginPath(); ctx.moveTo(x + d, y0); ctx.lineTo(x + d, y1); ctx.stroke(); });
+      for (let y = y0 + 8; y < y1 - 2; y += 12) { ctx.beginPath(); ctx.moveTo(x - 8, y); ctx.lineTo(x + 8, y); ctx.stroke(); }
+    });
   },
   drawPhylactery() {
     const x = 326, y = FLOOR[2] - 30, hp = this.run ? this.run.hp : D.cryptHp;
