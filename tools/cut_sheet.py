@@ -26,6 +26,8 @@ def main():
     ap.add_argument('--rot', nargs='*', default=[])
     ap.add_argument('--tol', type=float, default=40)
     ap.add_argument('--max', type=int, default=256)
+    ap.add_argument('--keepholes', action='store_true')  # garder opaques les reflets blancs fermés (fioles, verre)
+    ap.add_argument('--out', default='')  # dossier de sortie (pas de mise à jour de assets.js)
     a = ap.parse_args()
     keys = a.keys.split(',')
     rot = {r.split(':')[0]: float(r.split(':')[1]) for r in a.rot}
@@ -44,7 +46,7 @@ def main():
     bgmask = np.isin(lab, list(edge))
     # trous fermés quasi identiques au fond et assez grands
     holes, nh = ndimage.label((diff < a.tol * 0.45) & ~bgmask)
-    if nh:
+    if nh and not a.keepholes:
         hs = ndimage.sum(np.ones_like(diff), holes, range(1, nh + 1))
         big = np.where(hs > 120)[0] + 1
         bgmask |= np.isin(holes, big)
@@ -74,7 +76,7 @@ def main():
     if cur: rows.append(cur)
     ordered = [b for r in rows for b in sorted(r, key=lambda b: b[0][1].start)]
     base = np.asarray(im)
-    out = os.path.join(ROOT, 'assets'); os.makedirs(out, exist_ok=True)
+    out = a.out or os.path.join(ROOT, 'assets'); os.makedirs(out, exist_ok=True)
     for (sl, gid), key in zip(ordered, keys):
         if key == '-': continue
         m = fg & (grp == gid)
@@ -90,6 +92,7 @@ def main():
         piece.thumbnail((a.max, a.max), Image.LANCZOS)
         piece.save(os.path.join(out, key + '.png'))
         print('ok', key, piece.size)
+    if a.out: return
     lst = sorted(f[:-4] for f in os.listdir(out) if f.endswith('.png') or (f.startswith('bg_') and f.endswith('.jpg')))
     with open(os.path.join(ROOT, 'js', 'assets.js'), 'w') as f:
         f.write('/* Liste des images présentes dans assets/ (sans extension). Vide = dessins procéduraux. */\n')

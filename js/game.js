@@ -2308,15 +2308,8 @@ Scenes.crypt = {
     // torches
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
       const y = ROOM_TOP[r] + 44, f = Math.sin(time * 10 + i * 2) * 1.5;
+      if (drawTorch(x, y, i)) return;
       Art.glowAt(x, y - 8, 52 + f * 3, 'rgba(125,255,74,0.22)');
-      if (animDeco('deco_torch', x, y - 4, 52, 0.34, i, (tt, lit) => {
-        ctx.transform(1, 0, Math.sin(tt * 7) * 0.08, 1, 0, 0);
-        ctx.scale(1 + Math.sin(tt * 13) * 0.05, 1 + Math.sin(tt * 9) * 0.1 + Math.sin(tt * 23) * 0.04);
-        lit(0.15 + 0.2 * Math.abs(Math.sin(tt * 11)));
-      })) {
-        if (Math.random() < 0.04 && FX.parts.length < 200) FX.parts.push({ x: x + rnd(-3, 3), y: y - 26, vx: rnd(-8, 8), vy: -30, life: 0.7, t: 0, col: C.toxic, r: 1.6, g: -10 });
-        return;
-      }
       ctx.fillStyle = '#5a4030'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.lineTo(x + 6, y - 4); ctx.lineTo(x + 3, y + 16); ctx.lineTo(x - 3, y + 16); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#3a3440'; ctx.fillRect(x - 8, y - 6, 16, 4); ctx.strokeRect(x - 8, y - 6, 16, 4);
@@ -2332,7 +2325,7 @@ Scenes.crypt = {
       const type = S.trapSlots[i], cd = this.trapCd[i], ready = cd <= 0 && (this.phase === 'wave' || this.phase === 'tuto');
       const fight = this.phase === 'wave' || this.phase === 'tuto';
       Art.trap(type, TRAP_X[i], FLOOR[i] + 2, 40, ready, fight ? 1 - cd / D.traps[type].cd : undefined, this.trapAnim[i] > 0);
-      if (this.phase === 'prep' && S.tuto >= 99) txt(t('tr_' + type), TRAP_X[i], FLOOR[i] + 18, 9, C.dim, 'center', { stroke: false });
+      if (this.phase === 'prep' && S.tuto >= 99) txt(t('tr_' + type), TRAP_X[i], FLOOR[i] - 30, 10, C.bone, 'center');
     }
     // postes de garde
     if (this.phase === 'prep') for (let r = 0; r < 3; r++) for (let i = 0; i < 2; i++) {
@@ -2372,9 +2365,9 @@ Scenes.crypt = {
     for (let r = 0; r < 3; r++) {
       const y = FLOOR[r];
       if (fl) {
-        const h = 16, w = fl.naturalWidth * h / fl.naturalHeight;
+        const h = 18, w = fl.naturalWidth * h / fl.naturalHeight;
         ctx.save(); ctx.beginPath(); ctx.rect(8, y - 3, W - 16, h); ctx.clip();
-        for (let x = 8; x < W - 8; x += w - 1) ctx.drawImage(fl, x, y - 3, w, h);
+        for (let x = 8 - (r * 17) % w; x < W - 8; x += w - 0.5) ctx.drawImage(fl, x, y - 3, w + 0.5, h);
         ctx.restore(); continue;
       }
       ctx.fillStyle = '#4a3d58'; ctx.fillRect(8, y, W - 16, 11);
@@ -2384,7 +2377,7 @@ Scenes.crypt = {
       ctx.strokeStyle = C.ink; ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(W - 8, y); ctx.stroke();
     }
     [[333, FLOOR[0] + 8, FLOOR[1] + 2], [25, FLOOR[1] + 8, FLOOR[2] + 2]].forEach(([x, y0, y1]) => {
-      if (la) { const w = 26; ctx.save(); ctx.beginPath(); ctx.rect(x - w, y0, w * 2, y1 - y0); ctx.clip(); const h = la.naturalHeight * w / la.naturalWidth; for (let y = y0; y < y1; y += h - 1) ctx.drawImage(la, x - w / 2, y, w, h); ctx.restore(); return; }
+      if (la) { const w = 26; ctx.save(); ctx.beginPath(); ctx.rect(x - w, y0, w * 2, y1 - y0); ctx.clip(); const h = la.naturalHeight * w / la.naturalWidth; for (let y = y0; y < y1; y += h - 0.5) ctx.drawImage(la, x - w / 2, y, w, h + 0.5); ctx.restore(); return; }
       ctx.strokeStyle = C.ink; ctx.lineWidth = 6;
       [-9, 9].forEach(d => { ctx.beginPath(); ctx.moveTo(x + d, y0); ctx.lineTo(x + d, y1); ctx.stroke(); });
       for (let y = y0 + 8; y < y1 - 2; y += 12) { ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x + 9, y); ctx.stroke(); }
@@ -2395,11 +2388,8 @@ Scenes.crypt = {
   },
   drawPhylactery() {
     const x = 326, y = FLOOR[2] - 30, hp = this.run ? this.run.hp : D.cryptHp;
+    if (drawCrystal(x, FLOOR[2] + 2, hp <= 3)) return;
     Art.glowAt(x, y, 34 + Math.sin(time * 3) * 4, hp > 3 ? 'rgba(125,255,74,0.4)' : 'rgba(255,90,50,0.5)');
-    if (animDeco('deco_crystal', x, y + 2, 66, 0.69, 0, (tt, lit) => {
-      ctx.translate(0, Math.sin(tt * 2) * 2.5 - 2);
-      lit(hp > 3 ? 0.1 + 0.25 * (0.5 + 0.5 * Math.sin(tt * 3)) : 0.3 + 0.3 * Math.abs(Math.sin(tt * 8)), hp > 3 ? null : 'rgba(255,70,40,0.9)');
-    })) return;
     ctx.fillStyle = C.stoneD; ctx.fillRect(x - 14, y + 18, 28, 14); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(x - 14, y + 18, 28, 14);
     ctx.beginPath(); ctx.moveTo(x, y - 24); ctx.lineTo(x + 13, y); ctx.lineTo(x, y + 18); ctx.lineTo(x - 13, y); ctx.closePath();
     ctx.fillStyle = hp > 3 ? C.toxic : '#ff6a3a'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -2517,27 +2507,57 @@ Scenes.crypt = {
 };
 
 // ============================== Scène : Menu ==============================
-// décor en image dont le haut (flamme, cristal) est animé : anim(t, lit) déforme le haut, lit(a, teinte) l'illumine
-const animTint = document.createElement('canvas');
-function animDeco(k, x, y, size, split, seed, anim) {
-  const im = Art.img(k); if (!im) return false;
-  const iw = im.naturalWidth, ih = im.naturalHeight, s = size / Math.max(iw, ih), w = iw * s, h = ih * s, y0 = y - h / 2, sh = ih * split, hh = sh * s;
-  ctx.drawImage(im, 0, sh - 1, iw, ih - sh + 1, x - w / 2, y0 + hh - s, w, h - hh + s);
-  ctx.save(); ctx.translate(x, y0 + hh);
-  let glow = 0, tint = null;
-  anim(time + seed * 1.7, (a, c) => { glow = a; tint = c; });
-  ctx.drawImage(im, 0, 0, iw, sh, -w / 2, -hh, w, hh);
-  if (glow > 0) {
-    let src = im;
-    if (tint) {
-      animTint.width = iw; animTint.height = Math.ceil(sh); const g = animTint.getContext('2d');
-      g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, iw, sh); g.drawImage(im, 0, 0);
-      g.globalCompositeOperation = 'source-atop'; g.fillStyle = tint; g.fillRect(0, 0, iw, sh); src = animTint;
+// Bruit doux (somme de sinus) pour des animations organiques, sans saccades
+const wobble = (t, a, b, c) => Math.sin(t * a) * 0.5 + Math.sin(t * b + 1.3) * 0.3 + Math.sin(t * c + 2.1) * 0.2;
+// Torche murale en image : le corps reste fixe, la flamme (haut de l'image) ondule depuis sa base
+const TORCH_CUT = 0.286;
+function drawTorch(x, y, seed) {
+  const im = Art.img('deco_torch'); if (!im) return false;
+  const iw = im.naturalWidth, ih = im.naturalHeight, h = 58, s = h / ih, w = iw * s, y0 = y - h / 2 - 6;
+  const cut = Math.round(ih * TORCH_CUT), ch = cut * s, t = time + seed * 3.7;
+  const n1 = wobble(t, 5.3, 8.9, 14.7), n2 = wobble(t, 3.1, 6.7, 11.3);
+  Art.glowAt(x, y0 + ch * 0.7, 44 + n1 * 4, 'rgba(125,255,74,' + (0.2 + n1 * 0.05).toFixed(3) + ')');
+  ctx.drawImage(im, 0, cut, iw, ih - cut, x - w / 2, y0 + ch, w, h - ch);
+  ctx.save(); ctx.translate(x, y0 + ch);
+  ctx.transform(1, 0, n2 * 0.16, 1 + n1 * 0.1, 0, 0);
+  ctx.drawImage(im, 0, 0, iw, cut, -w / 2, -ch, w, ch);
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.1 + 0.12 * (n1 + 1) / 2;
+  ctx.drawImage(im, 0, 0, iw, cut, -w / 2, -ch, w, ch);
+  ctx.restore();
+  return true;
+}
+// Phylactère en image : halo qui respire, reflet qui balaie la gemme, petites étincelles ; rouge quand la crypte est presque détruite
+const sheenCv = document.createElement('canvas');
+function drawCrystal(x, bottom, danger) {
+  const im = Art.img('deco_crystal'); if (!im) return false;
+  const gem = Art.img(danger ? 'deco_crystal_red' : 'deco_crystal_gem');
+  const iw = im.naturalWidth, ih = im.naturalHeight, h = 72, s = h / ih, w = iw * s, x0 = x - w / 2, y0 = bottom - h;
+  const p = (Math.sin(time * (danger ? 6 : 2.2)) + 1) / 2, gy = y0 + h * 0.34;
+  Art.glowAt(x, gy, 40 + p * 8, danger ? 'rgba(255,60,40,' + (0.3 + p * 0.25).toFixed(3) + ')' : 'rgba(125,255,74,' + (0.22 + p * 0.16).toFixed(3) + ')');
+  ctx.drawImage(im, x0, y0, w, h);
+  if (gem) {
+    if (danger) ctx.drawImage(gem, x0, y0, w, h);
+    // reflet : une bande claire traverse la gemme toutes les 3,5 s
+    const k = (time % 3.5) / 1.2;
+    if (k < 1) {
+      sheenCv.width = iw; sheenCv.height = ih; const g = sheenCv.getContext('2d');
+      g.drawImage(gem, 0, 0); g.globalCompositeOperation = 'source-in';
+      const bx = -iw + k * iw * 3, gr = g.createLinearGradient(bx, 0, bx + iw * 0.8, ih * 0.5);
+      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, iw, ih);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(sheenCv, x0, y0, w, h); ctx.restore();
     }
-    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, glow);
-    ctx.drawImage(src, 0, 0, iw, sh, -w / 2, -hh, w, hh);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.08 + p * 0.18; ctx.drawImage(gem, x0, y0, w, h); ctx.restore();
   }
-  ctx.restore(); return true;
+  // étincelles qui scintillent sur les arêtes
+  [[-0.32, 0.22, 0], [0.3, 0.38, 2.1], [0.05, 0.05, 4.2]].forEach(([dx, dy, ph]) => {
+    const a = Math.max(0, Math.sin(time * 1.6 + ph)) ** 6; if (a < 0.02) return;
+    const sx = x + dx * w, sy = y0 + dy * h, r = 2 + a * 3;
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = danger ? '#ffd0c0' : '#f0ffe0';
+    ctx.beginPath(); ctx.moveTo(sx, sy - r * 1.6); ctx.lineTo(sx + r * 0.35, sy - r * 0.35); ctx.lineTo(sx + r * 1.6, sy); ctx.lineTo(sx + r * 0.35, sy + r * 0.35);
+    ctx.lineTo(sx, sy + r * 1.6); ctx.lineTo(sx - r * 0.35, sy + r * 0.35); ctx.lineTo(sx - r * 1.6, sy); ctx.lineTo(sx - r * 0.35, sy - r * 0.35); ctx.fill(); ctx.restore();
+  });
+  return true;
 }
 function bgNight(top, bot) {
   const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, top || '#1d1030'); g.addColorStop(1, bot || '#0a0510');
