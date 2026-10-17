@@ -323,7 +323,8 @@ const UI = {
     rr(x, y, b.w, b.h, 12);
     const g = ctx.createLinearGradient(0, y, 0, y + b.h); g.addColorStop(0, cols[1]); g.addColorStop(1, cols[0]);
     ctx.fillStyle = b.off ? '#4a4252' : g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
-    if (b.icon) {
+    if (b.icon && b.sub) { Art.icon(b.icon, x + b.w / 2, y + b.h * 0.4, b.h * 0.56); }
+    else if (b.icon) {
       const isz = Math.min(b.h, b.w) * 0.62;
       if (b.label) { Art.icon(b.icon, x + isz * 0.5 + 10, y + b.h / 2, isz); txt(b.label, x + isz + 16 + (b.w - isz - 16) / 2, y + b.h / 2 + 1, b.size, b.off ? '#999' : C.text); }
       else Art.icon(b.icon, x + b.w / 2, y + b.h / 2, isz);
@@ -679,7 +680,7 @@ const Art = (function () {
 
   // Images (assets/<clé>.png, listées dans js/assets.js) : elles remplacent les dessins procéduraux
   const imgs = {};
-  (window.ASSET_LIST || []).forEach(k => { const im = new Image(); im.src = 'assets/' + k + '.png'; imgs[k] = im; });
+  (window.ASSET_LIST || []).forEach(k => { const im = new Image(); im.src = 'assets/' + k + (k.startsWith('bg_') ? '.jpg' : '.png'); imgs[k] = im; });
   function img(k) { const im = imgs[k]; return im && im.complete && im.naturalWidth ? im : null; }
   // dessine l'image dans une boîte size×size centrée, en gardant les proportions
   function sprite(art, x, y, size) {
@@ -914,6 +915,7 @@ const Art = (function () {
   // ---- Icônes ----
   function icon(name, x, y, s) {
     if (sprite('ic_' + name, x, y, s)) return;
+    if (name === 'shop') name = 'skull';
     c.save(); c.translate(x, y); c.scale(s, s);
     switch (name) {
       case 'soul':
@@ -1575,7 +1577,7 @@ Scenes.atelier = {
   },
   drawTable() {
     const bgi = Art.img('bg_altar');
-    if (bgi) { ctx.save(); rr(14, 108, 332, 322, 18); ctx.clip(); const k = Math.max(332 / bgi.naturalWidth, 322 / bgi.naturalHeight); ctx.drawImage(bgi, 180 - bgi.naturalWidth * k / 2, 269 - bgi.naturalHeight * k / 2, bgi.naturalWidth * k, bgi.naturalHeight * k); ctx.restore(); rr(14, 108, 332, 322, 18); ctx.lineWidth = 4; ctx.strokeStyle = C.ink; ctx.stroke(); return; }
+    if (bgi) { ctx.save(); rr(14, 108, 332, 322, 18); ctx.clip(); const k = Math.max(332 / bgi.naturalWidth, 322 / bgi.naturalHeight); ctx.drawImage(bgi, 180 - bgi.naturalWidth * k / 2, 269 - bgi.naturalHeight * k / 2, bgi.naturalWidth * k, bgi.naturalHeight * k); ctx.fillStyle = 'rgba(8,4,16,0.3)'; ctx.fillRect(14, 108, 332, 322); ctx.restore(); rr(14, 108, 332, 322, 18); ctx.lineWidth = 4; ctx.strokeStyle = C.ink; ctx.stroke(); return; }
     // dalle de pierre
     rr(14, 108, 332, 322, 18);
     const g = ctx.createRadialGradient(180, 260, 40, 180, 260, 240); g.addColorStop(0, '#5a5266'); g.addColorStop(1, '#2c2634');
@@ -1713,7 +1715,7 @@ Scenes.atelier = {
       ctx.globalAlpha = n > 0 ? 1 : 0.35; Art.vial(f, x, 492, 34); ctx.globalAlpha = 1;
       txt(String(n), x + 15, 503, 12, n > 0 ? C.text : C.dim);
     });
-    txt(t('hold_to_inject'), 352, 492, 10, C.dim, 'right', { stroke: false });
+    if (o.length < 5) txt(t('hold_to_inject'), 352, 492, 10, C.dim, 'right', { stroke: false });
   },
   drawDrawer() {
     const y = DRAWER_Y;
@@ -2301,7 +2303,9 @@ Scenes.crypt = {
     if (bgi) ROOM_TOP.forEach((y, r) => {
       const rw = W - 16, rh = FLOOR[r] - y - 4, k = Math.max(rw / bgi.naturalWidth, rh / bgi.naturalHeight);
       ctx.save(); ctx.beginPath(); ctx.rect(8, y + 4, rw, rh); ctx.clip(); ctx.globalAlpha = 0.9;
-      ctx.drawImage(bgi, 180 - bgi.naturalWidth * k / 2, y + 4 + rh / 2 - bgi.naturalHeight * k / 2, bgi.naturalWidth * k, bgi.naturalHeight * k); ctx.restore();
+      ctx.drawImage(bgi, 180 - bgi.naturalWidth * k / 2, y + 4 + rh / 2 - bgi.naturalHeight * k / 2, bgi.naturalWidth * k, bgi.naturalHeight * k);
+      // assombrir pour garder les personnages lisibles
+      ctx.globalAlpha = 1; const g = ctx.createLinearGradient(0, y, 0, FLOOR[r]); g.addColorStop(0, 'rgba(8,4,16,0.6)'); g.addColorStop(1, 'rgba(8,4,16,0.25)'); ctx.fillStyle = g; ctx.fillRect(8, y + 4, rw, rh); ctx.restore();
     });
     // torches
     [[60, 0], [300, 0], [200, 1], [60, 2], [250, 2]].forEach(([x, r], i) => {
@@ -2477,6 +2481,12 @@ Scenes.crypt = {
 function bgNight(top, bot) {
   const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, top || '#1d1030'); g.addColorStop(1, bot || '#0a0510');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // mur de crypte très assombri en fond, s'il existe
+  const bgi = Art.img('bg_crypt');
+  if (bgi) {
+    const k = H / bgi.naturalHeight; ctx.globalAlpha = 0.28;
+    ctx.drawImage(bgi, W / 2 - bgi.naturalWidth * k / 2, 0, bgi.naturalWidth * k, H); ctx.globalAlpha = 1;
+  }
 }
 function graveyard(y) {
   ctx.fillStyle = '#0a0610';
@@ -2538,10 +2548,10 @@ Scenes.map = {
     const bw = 84, y = 574, bh = UI.bigH(56);
     this.btns = [
       UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('menu') }),
-      UI.btn({ x: 6, y, w: bw, h: bh, icon: 'altar', label: '', style: 'main', on: () => go('atelier', { from: 'map' }) }),
-      UI.btn({ x: 94, y, w: bw, h: bh, icon: 'skull', label: '', style: 'gold', on: () => go('shop'), badge: this.canBuy() ? '!' : null }),
-      UI.btn({ x: 182, y, w: bw, h: bh, icon: 'book', label: '', style: 'main', on: () => go('bestiary', { back: 'map' }) }),
-      UI.btn({ x: 270, y, w: bw, h: bh, icon: 'gear', label: '', style: 'main', on: () => go('settings', { back: 'map' }) })
+      UI.btn({ x: 6, y, w: bw, h: bh, icon: 'altar', label: '', sub: true, style: 'main', on: () => go('atelier', { from: 'map' }) }),
+      UI.btn({ x: 94, y, w: bw, h: bh, icon: 'shop', label: '', sub: true, style: 'gold', on: () => go('shop'), badge: this.canBuy() ? '!' : null }),
+      UI.btn({ x: 182, y, w: bw, h: bh, icon: 'book', label: '', sub: true, style: 'main', on: () => go('bestiary', { back: 'map' }) }),
+      UI.btn({ x: 270, y, w: bw, h: bh, icon: 'gear', label: '', sub: true, style: 'main', on: () => go('settings', { back: 'map' }) })
     ];
     this.labels = [t('atelier'), t('shop'), t('bestiary'), t('settings')];
     this.goBtn = UI.btn({ x: 200, y: 0, w: 130, h: 46, label: t('defend'), style: 'green', on: () => this.launch() });
@@ -2570,7 +2580,7 @@ Scenes.map = {
     Art.icon('soul', 300, 24, 22); txt(String(S.souls), 316, 25, 16, C.toxic, 'left');
     this.btns[2].badge = this.canBuy() ? '!' : null;
     UI.draw(this.btns);
-    this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h - 6, 9, C.dim, 'center', { stroke: false }));
+    this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h - 8, 10, C.text, 'center'));
     if (this.endlessBtn.show) { UI.drawBtn(this.endlessBtn); if (S.titan && S.endless) txt(t('best_n', { n: S.endless }), 180, 102, 10, C.dim); }
     if (S.run) UI.drawBtn(this.resumeBtn);
     if (this.sel) this.drawInfo();

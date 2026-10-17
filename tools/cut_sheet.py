@@ -90,7 +90,7 @@ def main():
         piece.thumbnail((a.max, a.max), Image.LANCZOS)
         piece.save(os.path.join(out, key + '.png'))
         print('ok', key, piece.size)
-    lst = sorted(f[:-4] for f in os.listdir(out) if f.endswith('.png'))
+    lst = sorted(f[:-4] for f in os.listdir(out) if f.endswith('.png') or (f.startswith('bg_') and f.endswith('.jpg')))
     with open(os.path.join(ROOT, 'js', 'assets.js'), 'w') as f:
         f.write('/* Liste des images présentes dans assets/ (sans extension). Vide = dessins procéduraux. */\n')
         f.write('window.ASSET_LIST = ' + json.dumps(lst) + ';\n')
