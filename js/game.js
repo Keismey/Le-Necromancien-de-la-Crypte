@@ -292,8 +292,8 @@ function rr(x, y, w, h, r) {
 }
 function panel(x, y, w, h, col, r) {
   // panneau en image (ui_panel) pour les fonds sombres standard
-  const pim = (!col || col === C.panel || /^rgba\(36,22,58/.test(col)) && Art.img('ui_panel');
-  if (pim) { nine(pim, x - 2, y - 2, w + 4, h + 4, Math.min(18, h / 2)); return; }
+  const pim = w >= 120 && h >= 44 && (!col || col === C.panel || /^rgba\(36,22,58/.test(col)) && Art.img('ui_panel');
+  if (pim) { nine(pim, x - 2, y - 2, w + 4, h + 4, Math.min(16, h / 2), 40); return; }
   rr(x, y, w, h, r === undefined ? 10 : r);
   ctx.fillStyle = col || C.panel; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
 }
@@ -320,7 +320,7 @@ function topBar(h) {
 function banner(title, cx, cy, size) {
   ctx.font = font(size || 18); const tw = ctx.measureText(title).width, w = Math.max(130, tw + 40), h = 32, x = cx - w / 2, y = cy - h / 2;
   const im = Art.img('ui_banner');
-  if (im) nine(im, x - 20, y - 6, w + 40, h + 12, 30);
+  if (im) { const bh = 40, wi = tw + 124; three(im, cx - wi / 2, cy - bh / 2 - 2, wi, bh, 135); }
   else {
     // queues
     [-1, 1].forEach(d => {
@@ -340,6 +340,21 @@ function soulPill(x, y) {
   ctx.font = font(14); const w = ctx.measureText(String(S.souls)).width + 34;
   rr(x - w, y - 13, w, 26, 13); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(125,255,74,0.45)'; ctx.stroke();
   Art.icon('soul', x - w + 13, y, 19); txt(String(S.souls), x - w + 25, y + 1, 14, C.toxic, 'left');
+}
+
+// image étirée en 3 morceaux horizontaux (boutons, bannière) : extrémités intactes, milieu étiré
+function three(im, x, y, w, h, cap) {
+  const iw = im.naturalWidth, ih = im.naturalHeight, k = h / ih, d = Math.min(cap * k, w / 2);
+  ctx.drawImage(im, 0, 0, cap, ih, x, y, d + 0.5, h);
+  ctx.drawImage(im, cap, 0, iw - cap * 2, ih, x + d, y, w - d * 2 + 0.5, h);
+  ctx.drawImage(im, iw - cap, 0, cap, ih, x + w - d, y, d, h);
+}
+// idem en vertical (glissière du levier)
+function threeV(im, x, y, w, h, cap) {
+  const iw = im.naturalWidth, ih = im.naturalHeight, k = w / iw, d = Math.min(cap * k, h / 2);
+  ctx.drawImage(im, 0, 0, iw, cap, x, y, w, d + 0.5);
+  ctx.drawImage(im, 0, cap, iw, ih - cap * 2, x, y + d, w, h - d * 2 + 0.5);
+  ctx.drawImage(im, 0, ih - cap, iw, cap, x, y + h - d, w, d);
 }
 
 // ============================== UI (boutons) ==============================
@@ -369,7 +384,7 @@ const UI = {
     const bim = Art.img('btn_' + (b.off ? 'dark' : (b.style || 'main')));
     if (bim) {
       ctx.save(); if (b.off) ctx.globalAlpha *= 0.7;
-      nine(bim, x - 2, y - 2, b.w + 4, b.h + 6 - pr, Math.min(22, b.h * 0.45)); ctx.restore();
+      three(bim, x - 3, y - 2, b.w + 6, b.h + 5, b.off || b.style === 'dark' ? 60 : 75); ctx.restore();
     } else {
       rr(x, y + 4 - pr, b.w, b.h, 12); ctx.fillStyle = C.ink; ctx.fill();
       rr(x, y, b.w, b.h, 12);
@@ -382,7 +397,7 @@ const UI = {
       ctx.restore();
       rr(x, y, b.w, b.h, 12); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
     }
-    if (b.icon && b.sub) { Art.icon(b.icon, x + b.w / 2, y + b.h * 0.4, b.h * 0.56); }
+    if (b.icon && b.sub) { Art.icon(b.icon, x + b.w / 2, y + b.h * 0.38, b.h * 0.5); }
     else if (b.icon) {
       const isz = Math.min(b.h, b.w) * 0.62;
       if (b.label) { Art.icon(b.icon, x + isz * 0.5 + 10, y + b.h / 2, isz); txt(b.label, x + isz + 16 + (b.w - isz - 16) / 2, y + b.h / 2 + 1, b.size, b.off ? '#999' : C.text); }
@@ -870,8 +885,9 @@ const Art = (function () {
       const bob = o.walk ? Math.abs(Math.sin(t * 10)) * size * 0.04 : 0, lean = o.atk ? Math.sin(o.atk * PI) * 0.25 : 0;
       c.save(); c.translate(x, y); if (o.flip) c.scale(-1, 1); c.rotate(lean); if (o.alpha !== undefined) c.globalAlpha *= o.alpha;
       c.drawImage(im, -w / 2, -h - bob, w, h);
-      if (o.hurt) { c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(255,60,60,0.45)'; c.fillRect(-w / 2, -h - bob, w, h); }
-      c.restore(); return;
+      c.restore();
+      if (o.hurt) tinted(x, y + 2, w * 1.6, h * 1.3, 'rgba(255,50,50,0.55)', () => { c.save(); if (o.flip) c.scale(-1, 1); c.rotate(lean); c.drawImage(im, -w / 2, -h - bob - 2, w, h); c.restore(); });
+      return;
     }
     c.save(); c.translate(x, y); c.scale(size, size); if (o.flip) c.scale(-1, 1);
     if (o.alpha !== undefined) c.globalAlpha *= o.alpha;
@@ -1047,6 +1063,18 @@ const Art = (function () {
   // Rendue une seule fois dans un canevas hors écran, puis noircie (ctx.filter est très lent sur mobile).
   // draw(x, y) dessine la figure ancrée en (x, y) ; le cadre va de (x-ax, y-ay) sur w×h.
   const silCache = {};
+  // Teinte (rouge de coup, etc.) appliquée uniquement sur les pixels du modèle : on redessine dans un calque, on colore, on superpose
+  const tintCv = document.createElement('canvas');
+  function tinted(x, y, w, h, col, draw) {
+    const k = Math.min(3, view.dpr * view.s), cw = Math.ceil(w * k), ch = Math.ceil(h * k);
+    if (tintCv.width < cw || tintCv.height < ch) { tintCv.width = Math.max(tintCv.width, cw); tintCv.height = Math.max(tintCv.height, ch); }
+    const g = tintCv.getContext('2d'), prev = c;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, cw, ch);
+    g.setTransform(k, 0, 0, k, (w / 2) * k, h * k);
+    c = g; try { draw(); } finally { c = prev; }
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, cw, ch);
+    c.drawImage(tintCv, 0, 0, cw, ch, x - w / 2, y - h, w, h);
+  }
   function silhouette(key, x, y, w, h, ax, ay, draw) {
     const k = Math.min(3, view.dpr * view.s), id = key + '@' + k;
     let oc = silCache[id];
@@ -1062,7 +1090,7 @@ const Art = (function () {
     c.drawImage(oc, x - ax, y - ay, w, h);
   }
 
-  return { A, progress, deco: sprite, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
+  return { A, progress, tinted, deco: sprite, art: drawArt, piece, creature, creatureFoot, hero, trap, icon, hand: handPtr, vial, glowAt, hexA, silhouette, img, LAYOUT };
 })();
 
 // ============================== Logic (pièces, créatures, stats) ==============================
@@ -1227,7 +1255,7 @@ Scenes.atelier = {
     this.btns = [
       UI.btn({ x: 6, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => this.leave() }),
       UI.btn({ x: 222, y: 4, w: 62, h: 40, icon: 'auto', label: '', style: 'gold', on: () => this.autoBuild(), show: S.set.auto }),
-      this.dismantleBtn = UI.btn({ x: 300, y: 330, w: 56, h: 52, label: t('dismantle'), size: 11, style: 'red', on: () => this.dismantle(), show: false })
+      this.dismantleBtn = UI.btn({ x: 286, y: 336, w: 72, h: 40, label: t('dismantle'), size: 10, style: 'red', on: () => this.dismantle(), show: false })
     ];
     this.cardBtns = [UI.btn({ x: 120, y: 470, w: 120, h: 46, label: t('ok'), style: 'green', on: () => this.closeCard() })];
   },
@@ -1717,7 +1745,7 @@ Scenes.atelier = {
   drawLever() {
     const x = LEVER.x, hy = lerp(LEVER.y0, LEVER.y1, this.lever);
     const base = Art.img('lever_base'), knob = Art.img('lever_knob');
-    if (base) nine(base, x - 13, LEVER.y0 - 18, 26, LEVER.y1 - LEVER.y0 + 36, 13);
+    if (base) threeV(base, x - 13, LEVER.y0 - 20, 26, LEVER.y1 - LEVER.y0 + 40, 60);
     else { ctx.fillStyle = '#2a2232'; rr(x - 7, LEVER.y0 - 10, 14, LEVER.y1 - LEVER.y0 + 20, 7); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.stroke(); }
     const ready = this.parts.torso && !this.seamSlots().length;
     if (ready && !this.wake) Art.glowAt(x, hy, 30 + Math.sin(time * 5) * 4, 'rgba(125,255,74,0.45)');
@@ -1846,8 +1874,13 @@ const TRAP_X = [172, 186, 160];
 const POST_X = [[132, 250], [232, 112], [118, 232]];
 const ROOM_DIR = [1, -1, 1];
 // recul minimal : un héros repoussé reste à portée des créatures (bord gauche de l'étage 1 à x≈26)
-const PUSH_MIN_S = 40;
-function pushBack(h, d) { h.s = Math.max(Math.min(h.s, PUSH_MIN_S), h.s - d); const p = pathPos(h.s); h.x = p.x; h.y = p.y; h.room = p.room; }
+// Marge d'entrée : un héros repoussé ne recule pas jusqu'au bord par où arrivent les suivants (le combat reste visible)
+const PUSH_MIN_S = 40, ENTRY_MARGIN = 72;
+const ROOM_S0 = [0, 1, 2].map(r => SEGS.find(g => g.room === r).s0);
+function pushBack(h, d) {
+  const floor = h.room >= 0 ? ROOM_S0[h.room] + ENTRY_MARGIN + (h.room === 0 ? 14 : 0) : PUSH_MIN_S;
+  h.s = Math.max(Math.min(h.s, floor), h.s - d); const p = pathPos(h.s); h.x = p.x; h.y = p.y; h.room = p.room;
+}
 function pathPos(s) {
   for (const g of SEGS) if (s <= g.s0 + g.l) { const k = (s - g.s0) / g.l; return { x: lerp(g.a[0], g.b[0], k), y: lerp(g.a[1], g.b[1], k), room: g.room }; }
   const g = SEGS[SEGS.length - 1]; return { x: g.b[0], y: g.b[1], room: g.room };
@@ -2454,7 +2487,7 @@ Scenes.crypt = {
   },
   drawPhylactery() {
     const x = 326, y = FLOOR[2] - 30, hp = this.run ? this.run.hp : D.cryptHp;
-    if (drawCrystal(x, FLOOR[2] + 2, hp <= 3)) return;
+    if (drawCrystal(x - 8, FLOOR[2] + 1, hp <= 3)) return;
     Art.glowAt(x, y, 34 + Math.sin(time * 3) * 4, hp > 3 ? 'rgba(125,255,74,0.4)' : 'rgba(255,90,50,0.5)');
     ctx.fillStyle = C.stoneD; ctx.fillRect(x - 14, y + 18, 28, 14); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(x - 14, y + 18, 28, 14);
     ctx.beginPath(); ctx.moveTo(x, y - 24); ctx.lineTo(x + 13, y); ctx.lineTo(x, y + 18); ctx.lineTo(x - 13, y); ctx.closePath();
@@ -2472,8 +2505,9 @@ Scenes.crypt = {
       return;
     }
     const size = 24, foot = Art.creatureFoot(c.parts);
-    if (u.hurt > 0) Art.glowAt(u.x, fy - 26, 26, 'rgba(255,60,60,0.5)');
-    Art.creature(c.parts, u.x, fy - foot * size - 1, size, { t: time, seed: u.seed, flip: !u.flip, atk: u.atk > 0 ? 1 - u.atk : 0, ghost: u.st.mut.soul, noGlow: true });
+    const co = { t: time, seed: u.seed, flip: !u.flip, atk: u.atk > 0 ? 1 - u.atk : 0, ghost: u.st.mut.soul, noGlow: true }, cy = fy - foot * size - 1;
+    Art.creature(c.parts, u.x, cy, size, co);
+    if (u.hurt > 0) Art.tinted(u.x, fy + 4, size * 4, size * 4, 'rgba(255,50,50,0.55)', () => Art.creature(c.parts, 0, cy - fy - 4, size, co));
     if (u.stun > 0) txt('✦', u.x, fy - foot * size - size * 1.3, 12, C.gold);
     const hp = Math.max(0, u.st.hp - c.dmg), k = hp / u.st.hp;
     if (k < 1) { const y = fy - foot * size - size * 1.25; ctx.fillStyle = '#300'; ctx.fillRect(u.x - 14, y, 28, 4); ctx.fillStyle = k > 0.5 ? C.toxic : k > 0.25 ? '#e0b030' : C.red; ctx.fillRect(u.x - 14, y, 28 * k, 4); }
@@ -2757,11 +2791,11 @@ Scenes.map = {
     NODES.forEach((n, i) => this.drawNode(i + 1, n[0], n[1]));
     // barre du haut
     topBar(52);
-    banner(t('map_title'), 172, 25, 15);
+    banner(t('map_title'), 172, 25, 14);
     soulPill(354, 25);
     this.btns[2].badge = this.canBuy() ? '!' : null;
     UI.draw(this.btns);
-    this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h - 8, 10, C.text, 'center'));
+    this.btns.slice(1).forEach((b, i) => txt(this.labels[i], b.x + b.w / 2, b.y + b.h - 13, 10, C.text, 'center'));
     if (this.endlessBtn.show) { UI.drawBtn(this.endlessBtn); if (S.titan && S.endless) txt(t('best_n', { n: S.endless }), 180, 102, 10, C.dim); }
     if (S.run) UI.drawBtn(this.resumeBtn);
     if (this.sel) this.drawInfo();
@@ -2771,12 +2805,12 @@ Scenes.map = {
     const st = Art.img('path_stone'), pts = [[NODES[0][0], NODES[0][1] + 44]].concat(NODES);
     let k = 0;
     for (let i = 1; i < pts.length; i++) {
-      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round((len - 44) / 17));
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round((len - 44) / 24));
       const lit = i - 1 <= S.cleared;
       for (let j = 0; j <= n; j++) {
         const f = (22 + j * (len - 44) / n) / len, x = lerp(x0, x1, f), y = lerp(y0, y1, f), h = Math.sin(++k * 12.9898) * 43758.5453 % 1;
         const rot = h * 0.8, rx = 7 + Math.abs(h) * 2, ry = 4.5 + Math.abs(h) * 1.2;
-        if (st) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = lit ? 1 : 0.55; ctx.drawImage(st, -rx * 1.3, -ry * 1.3, rx * 2.6, ry * 2.6); ctx.restore(); continue; }
+        if (st) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = lit ? 1 : 0.45; ctx.drawImage(st, -rx * 1.1, -ry * 1.1, rx * 2.2, ry * 2.2); ctx.restore(); continue; }
         ctx.save(); ctx.translate(x, y + 1.5); ctx.rotate(rot);
         ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
         ctx.translate(0, -1.5);
