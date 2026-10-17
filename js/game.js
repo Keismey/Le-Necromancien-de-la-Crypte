@@ -89,7 +89,7 @@ function newState() {
   return {
     v: SAVE_VER,
     lang: nav.startsWith('fr') ? 'fr' : 'en',
-    set: { sound: true, music: true, vib: true, auto: true, big: false, easy: false },
+    set: { sound: true, music: true },
     nextId: 1,
     cleared: 0,                 // dernière nuit terminée
     stars: {},                  // nuit → étoiles
@@ -98,7 +98,6 @@ function newState() {
     creatures: [],              // créatures de la crypte
     draft: null,                // créature en cours d'assemblage sur l'autel
     owned: { traps: { spikes: 1 }, fluids: {}, altar: 0, grim: {} },
-    stock: {},                  // doses de fluides restantes cette nuit
     trapSlots: ['spikes', 'spikes', 'spikes'],
     relics: {},
     best: { creatures: [], recipes: {}, heroes: {}, made: 0 },
@@ -250,7 +249,6 @@ const Sfx = (function () {
   });
   return { unlock, play, Music };
 })();
-function vib(ms) { if (S && S.set.vib && navigator.vibrate) try { navigator.vibrate(ms); } catch (_) {} }
 
 // ============================== Palette & texte ==============================
 const C = {
@@ -324,7 +322,7 @@ function banner(title, cx, cy, size) {
   if (im) {
     // face avant de la banderole : y 3-66 sur 85 px, entre les deux enroulements (x 115-785 sur 900)
     const bh = 42, wi = tw + 140, by = cy - bh / 2 - 2;
-    three(im, cx - wi / 2, by, wi, bh, 135); ty = by + bh * (34.5 / 85) + 1;
+    three(im, cx - wi / 2, by, wi, bh, 135); ty = by + bh * (34.5 / 85);
   }
   else {
     // queues
@@ -338,7 +336,9 @@ function banner(title, cx, cy, size) {
     ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
     ctx.strokeStyle = 'rgba(236,224,195,0.45)'; ctx.lineWidth = 1.5; rr(x + 4, y + 4, w - 8, h - 8, 4); ctx.stroke();
   }
-  txt(title, cx, ty, size || 18, C.text, 'center', { sw: 5 });
+  // centrage optique : la hauteur des majuscules est centrée sur la face (indépendant de la police du téléphone)
+  ctx.font = font(size || 18); const m = ctx.measureText('H'), capH = m.actualBoundingBoxAscent || (size || 18) * 0.72;
+  txt(title, cx, ty + capH / 2, size || 18, C.text, 'center', { sw: 5, base: 'alphabetic' });
 }
 // Compteur d'âmes dans une pastille
 function soulPill(x, y) {
@@ -366,7 +366,6 @@ function threeV(im, x, y, w, h, cap) {
 const UI = {
   pressed: null,
   btn(o) { return Object.assign({ x: 0, y: 0, w: 120, h: 46, label: '', icon: null, on: null, show: true, off: false, style: 'main', pulse: false, size: 16 }, o); },
-  bigH(h) { return S.set.big ? Math.max(h, 54) : h; },
   hit(b, p) { return b.show && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h; },
   down(list, p) {
     for (let i = list.length - 1; i >= 0; i--) {
@@ -377,7 +376,7 @@ const UI = {
   },
   up(list, p) {
     const b = this.pressed; this.pressed = null;
-    if (b && this.hit(b, p) && !b.off && list.indexOf(b) >= 0) { Sfx.play('tap'); vib(10); if (b.on) b.on(); return true; }
+    if (b && this.hit(b, p) && !b.off && list.indexOf(b) >= 0) { Sfx.play('tap'); if (b.on) b.on(); return true; }
     return !!b;
   },
   draw(list) { list.forEach(b => { if (b.show) this.drawBtn(b); }); },
@@ -1140,6 +1139,8 @@ const Logic = {
     const tp = D.pieces[p.k], m = D.rarityMult[p.r]; const st = tp.st;
     return ((st.hp || 0) * 0.3 + (st.str || 0) * 1.6 + (st.mag || 0) * 1.5 + (st.spd || 0) * 0.8 + (st.def || 0) * 0.9) * m;
   },
+  // valeur de couture d'une créature (sert au prix de réparation)
+  sewValue(parts) { let v = 0; for (const k in parts) if (k !== 'torso' && parts[k]) v += D.sewCost[parts[k].r] || 0; return v; },
   stats(parts) {
     const b = Object.assign({}, D.creatureBase);
     const fx = { blood: 0, poison: 0, ice: 0, fire: 0, lightning: 0, soul: 0 }, mut = {}, src = {}, keys = {};
@@ -1270,7 +1271,7 @@ Scenes.atelier = {
   makeButtons() {
     this.btns = [
       UI.btn({ x: 6, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => this.leave() }),
-      UI.btn({ x: 222, y: 4, w: 62, h: 40, icon: 'auto', label: '', style: 'gold', on: () => this.autoBuild(), show: S.set.auto }),
+      UI.btn({ x: 222, y: 4, w: 62, h: 40, icon: 'auto', label: '', style: 'gold', on: () => this.autoBuild() }),
       this.dismantleBtn = UI.btn({ x: 286, y: 336, w: 72, h: 40, label: t('dismantle'), size: 10, style: 'red', on: () => this.dismantle(), show: false })
     ];
     this.cardBtns = [UI.btn({ x: 120, y: 470, w: 120, h: 46, label: t('ok'), style: 'green', on: () => this.closeCard() })];
@@ -1293,6 +1294,18 @@ Scenes.atelier = {
   },
   seamSlots() { const P = this.parts; return this.slots().filter(s => s !== 'torso' && P[s] && P[s].q === null); },
   needRepair() { return this.target && ((this.target.dmg || 0) > 0 || this.target.fallen); },
+  // Économie : chaque couture, réparation et dose coûte des âmes (gratuit pendant le tutoriel et pour le Titan)
+  free() { return S.tuto < 99 || this.titan; },
+  seamCost(slot) {
+    if (this.free()) return 0;
+    if (slot === 'repair') {
+      const c = this.target, st = Logic.stats(c.parts), frac = c.fallen ? 1 : clamp((c.dmg || 0) / st.hp, 0, 1);
+      return Math.max(1, Math.ceil(frac * D.repairK * Logic.sewValue(c.parts)));
+    }
+    const pc = this.parts[slot]; return pc ? D.sewCost[pc.r] : 0;
+  },
+  doseCost(f) { return this.free() ? 0 : D.doseCost[f]; },
+  pay(n, x, y) { if (!n) return; S.souls -= n; FX.text(x, y, '-' + n, C.toxic, 14); },
   activeSeam() {
     const list = this.seamSlots();
     if (this.active && list.indexOf(this.active) >= 0) return this.active;
@@ -1312,7 +1325,7 @@ Scenes.atelier = {
     }
     return pts;
   },
-  sewMul() { return S.tuto < 99 ? D.sew.tutoMul : S.set.easy ? D.sew.easyMul : 1; },
+  sewMul() { return S.tuto < 99 ? D.sew.tutoMul : 1; },
 
   // ---- Actions ----
   place(p, slot, from) {
@@ -1321,14 +1334,14 @@ Scenes.atelier = {
     if (from === 'inv') { const inv = this.inv(); const i = inv.indexOf(p); if (i >= 0) inv.splice(i, 1); }
     p.q = slot === 'torso' ? 1 : null;
     P[slot] = p; this.pop[slot] = time; this.active = slot === 'torso' ? this.active : slot;
-    Sfx.play('bone'); vib(15); FX.spark(ALT[slot].x, ALT[slot].y, C.bone, 8, 80);
+    Sfx.play('bone'); FX.spark(ALT[slot].x, ALT[slot].y, C.bone, 8, 80);
     if (S.tuto === 3 && slot !== 'torso') { S.tuto = 4; this.tutoHint(); }
     Save.save();
   },
   toInv(p) { if (this.titan) { p.q = null; S.titanInv.push(p); } else Logic.invAdd(p); },
   grind(p) {
     if (this.titan) { this.toInv(p); return; }
-    Logic.invRemove(p); S.souls += D.grindSouls[p.r]; Sfx.play('grind'); vib(30);
+    Logic.invRemove(p); S.souls += D.grindSouls[p.r]; Sfx.play('grind');
     if (!S.hints.grinder) { S.hints.grinder = 1; Toast.show(t('hint_grinder')); }
     FX.spark(BIN.x, BIN.y, C.bone, 14, 100); FX.text(BIN.x + 10, BIN.y - 30, '+' + D.grindSouls[p.r], C.toxic, 16);
     Save.save();
@@ -1365,7 +1378,7 @@ Scenes.atelier = {
     else if (!this.titan && S.creatures.length >= D.maxCreatures) err = 'roster_full';
     if (err) { Toast.show(t(err), '#ffb0b0'); Sfx.play('error'); return false; }
     this.wake = { t: 0, done: false }; Hint.clear();
-    Sfx.play('zap'); vib([40, 60, 40]);
+    Sfx.play('zap');
     return true;
   },
   finishWake() {
@@ -1432,7 +1445,9 @@ Scenes.atelier = {
       const pts = this.seamPath(seam), r = 32 * Math.min(1.6, this.sewMul());
       const a = pts[0], b = pts[pts.length - 1];
       if (dist(p.x, p.y, a[0], a[1]) < r || dist(p.x, p.y, b[0], b[1]) < r) {
-        this.sew = { slot: seam, pts, smp: [{ x: p.x, y: p.y }], len: 0 }; Sfx.play('sew'); return;
+        const cost = this.seamCost(seam);
+        if (S.souls < cost) { Toast.show(t('need_souls', { n: cost })); Sfx.play('error'); return; }
+        this.sew = { slot: seam, pts, smp: [{ x: p.x, y: p.y }], len: 0, cost }; Sfx.play('sew'); return;
       }
     }
     // levier
@@ -1446,7 +1461,7 @@ Scenes.atelier = {
     if (ps) { this.press = { kind: 'slot', slot: ps, x: p.x, y: p.y }; return; }
     // fiole
     const v = this.vialAt(p);
-    if (v) { if ((S.stock[v] || 0) <= 0) { Toast.show(t('no_dose')); Sfx.play('error'); return; } this.vial = { type: v, x: p.x, y: p.y, target: null, fill: 0, ax: p.x, ay: p.y }; Sfx.play('vial'); return; }
+    if (v) { if (S.souls < this.doseCost(v)) { Toast.show(t('need_souls', { n: this.doseCost(v) })); Sfx.play('error'); return; } this.vial = { type: v, x: p.x, y: p.y, target: null, fill: 0, ax: p.x, ay: p.y }; Sfx.play('vial'); return; }
     // onglets
     if (p.y >= DRAWER_Y && p.y < DRAWER_Y + 28 && !this.titan) { const i = Math.floor(p.x / (W / TABS.length)); this.tab = TABS[clamp(i, 0, TABS.length - 1)]; this.scroll = 0; Sfx.play('tap'); return; }
     // tiroir
@@ -1545,14 +1560,15 @@ Scenes.atelier = {
     if (dev <= D.sew.perfect * mul) { q = D.quality.perfect; key = 'perfect'; }
     else if (dev <= D.sew.good * mul) { q = D.quality.good; key = 'good'; }
     else { q = D.quality.bad; key = 'bad'; }
+    this.pay(s.cost, mid[0], mid[1] + 18);
     if (s.slot === 'repair') {
-      this.target.dmg = 0; this.target.fallen = false; Sfx.play('good'); vib(30);
+      this.target.dmg = 0; this.target.fallen = false; Sfx.play('good');
       FX.text(mid[0], mid[1] - 20, t('repaired'), C.toxic, 16); FX.spark(mid[0], mid[1], C.toxic, 16, 120);
       Save.save(); return;
     }
     const pc = this.parts[s.slot]; if (!pc) return;
     pc.q = q; this.active = null;
-    Sfx.play(key); vib(key === 'bad' ? [60, 40, 60] : 30);
+    Sfx.play(key);
     FX.text(mid[0], mid[1] - 22, t('sew_' + key) + (q !== 1 ? ' ' + (q > 1 ? '+' : '') + Math.round((q - 1) * 100) + '%' : ''), key === 'perfect' ? C.gold : key === 'good' ? C.toxic : '#ff7a7a', key === 'perfect' ? 19 : 16);
     FX.spark(mid[0], mid[1], key === 'perfect' ? C.gold : key === 'good' ? C.bone : C.red, key === 'perfect' ? 26 : 12, 130);
     if (key === 'perfect') this.flash[s.slot] = time;
@@ -1566,9 +1582,9 @@ Scenes.atelier = {
     else if (pc.fl) Toast.show(t('fluid_replaced'));
     const used = d - (pc.fl && pc.fl.t === type ? pc.fl.d : 0);
     pc.fl = { t: type, d: Math.min(3, d) };
-    S.stock[type] = Math.max(0, (S.stock[type] || 0) - used);
     const a = ALT[slot];
-    Sfx.play('vial'); vib(20); FX.spark(a.x, a.y, D.fluids[type].color, 14, 90);
+    this.pay(used * this.doseCost(type), a.x + 24, a.y + 10);
+    Sfx.play('vial'); FX.spark(a.x, a.y, D.fluids[type].color, 14, 90);
     if (pc.fl.d >= 3) { Toast.show(t('overdose') + ' ' + t('mut_' + type), '#ffd27a'); FX.shake(4, 0.3); Sfx.play('zap'); }
     else FX.text(a.x, a.y - 30, t('fl_' + type) + ' ×' + pc.fl.d, D.fluids[type].color, 15);
     Save.save();
@@ -1581,16 +1597,16 @@ Scenes.atelier = {
     if (this.vial && this.vial.target) {
       const pc = this.parts[this.vial.target];
       const cur = pc && pc.fl && pc.fl.t === this.vial.type ? pc.fl.d : 0;
-      const max = Math.min(3 - cur, S.stock[this.vial.type] || 0);
+      const dc = this.doseCost(this.vial.type), max = Math.min(3 - cur, dc ? Math.floor(S.souls / dc) : 3);
       const before = Math.floor(this.vial.fill);
       this.vial.fill = Math.min(max + 0.001, this.vial.fill + dt / D.inoculateTime);
-      if (Math.floor(this.vial.fill) > before && Math.floor(this.vial.fill) <= max) { Sfx.play('tap'); vib(15); }
+      if (Math.floor(this.vial.fill) > before && Math.floor(this.vial.fill) <= max) { Sfx.play('tap'); }
     }
     if (this.wake) {
       const w = this.wake; w.t += dt;
       if (w.t < 1.2 && Math.random() < dt * 14) { FX.bolt(rnd(60, 300), 96, rnd(140, 220), rnd(170, 330), C.toxic); FX.flash = 0.6; }
       if (w.t >= 1.2 && !w.done) {
-        w.done = true; FX.shake(8, 0.5); Sfx.play('roar'); vib(200);
+        w.done = true; FX.shake(8, 0.5); Sfx.play('roar');
         FX.spark(180, 250, C.toxic, 40, 200); FX.spark(180, 250, C.bone, 20, 160);
         if (this.titan) { S.titan = true; Save.save(); } else this.finishWake();
       }
@@ -1737,7 +1753,9 @@ Scenes.atelier = {
       ctx.fillStyle = 'rgba(125,255,74,0.35)'; ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], r + 6, 0, 7); ctx.fill();
       Art.icon('needle', pts[0][0], pts[0][1], 26);
       ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(pts[24][0], pts[24][1], 5, 0, 7); ctx.fill();
-      if (s === 'repair') txt(t('resew'), pts[12][0], pts[12][1] - 22, 13, C.toxic);
+      const cost = this.seamCost(s), lbl = s === 'repair' ? t('resew') : '';
+      if (lbl) txt(lbl, pts[12][0], pts[12][1] - 22, 13, C.toxic);
+      if (cost) { const ok = S.souls >= cost, cx = pts[0][0], cy = pts[0][1] + 24; Art.icon('soul', cx - 8, cy, 15); txt(String(cost), cx + 1, cy + 1, 12, ok ? C.toxic : '#ff8a8a', 'left'); }
     }
   },
   drawStitches(s, q) {
@@ -1821,9 +1839,10 @@ Scenes.atelier = {
     const o = this.titan ? [] : this.owned();
     if (!o.length) { txt(this.titan ? '' : t('fluids_locked'), W / 2, 492, 11, 'rgba(165,150,191,0.6)', 'center', { stroke: false }); return; }
     o.forEach((f, i) => {
-      const x = 33 + i * 50, n = S.stock[f] || 0;
-      ctx.globalAlpha = n > 0 ? 1 : 0.35; Art.vial(f, x, 492, 34); ctx.globalAlpha = 1;
-      txt(String(n), x + 15, 503, 12, n > 0 ? C.text : C.dim);
+      const x = 33 + i * 50, c = this.doseCost(f), ok = S.souls >= c;
+      ctx.globalAlpha = ok ? 1 : 0.35; Art.vial(f, x, 492, 34); ctx.globalAlpha = 1;
+      // prix d'une dose
+      if (c) { Art.icon('soul', x + 9, 506, 12); txt(String(c), x + 15, 507, 11, ok ? C.toxic : C.dim, 'left'); }
     });
     if (o.length < 5) txt(t('hold_to_inject'), 352, 492, 10, C.dim, 'right', { stroke: false });
   },
@@ -1891,7 +1910,7 @@ const POST_X = [[132, 250], [232, 112], [118, 232]];
 const ROOM_DIR = [1, -1, 1];
 // recul minimal : un héros repoussé reste à portée des créatures (bord gauche de l'étage 1 à x≈26)
 // Marge d'entrée : un héros repoussé ne recule pas jusqu'au bord par où arrivent les suivants (le combat reste visible)
-const PUSH_MIN_S = 40, ENTRY_MARGIN = 72;
+const PUSH_MIN_S = 40, ENTRY_MARGIN = 72, HOLD_LEASH = 36, RANGED_STOP = 70; // tireurs : s'approchent à 70 px pour tirer (combat au milieu de l'écran)
 const ROOM_S0 = [0, 1, 2].map(r => SEGS.find(g => g.room === r).s0);
 function pushBack(h, d) {
   const floor = h.room >= 0 ? ROOM_S0[h.room] + ENTRY_MARGIN + (h.room === 0 ? 14 : 0) : PUSH_MIN_S;
@@ -1920,8 +1939,7 @@ Scenes.crypt = {
     this.run = { night: n, wave: 0, hp: D.cryptHp, kills: 0, invaded: false, destroyed: false, endless, waves: endless ? 9999 : D.wavesPerNight };
     S.run = this.run;
     S.creatures.forEach(c => { c.dmg = 0; c.fallen = false; });
-    for (const f in S.owned.fluids) S.stock[f] = D.fluidStock;
-    if (n >= 4 && !S.owned.fluids.blood) { S.owned.fluids.blood = 1; S.stock.blood = D.fluidStock; this.newsFluids = true; }
+    if (n >= 4 && !S.owned.fluids.blood) { S.owned.fluids.blood = 1; this.newsFluids = true; }
     this.setupNight(false);
     Save.save();
   },
@@ -1946,8 +1964,8 @@ Scenes.crypt = {
   makeButtons() {
     this.btns = [
       this.bPause = UI.btn({ x: 6, y: 6, w: 40, h: 38, icon: 'pause', style: 'dark', on: () => { this.paused = true; } }),
-      this.bAtelier = UI.btn({ x: 8, y: 574, w: 140, h: UI.bigH(54), icon: 'altar', label: t('atelier'), style: 'main', on: () => this.toAtelier() }),
-      this.bWave = UI.btn({ x: 156, y: 574, w: 196, h: UI.bigH(54), icon: 'play', label: '', style: 'green', on: () => this.startWave(false) }),
+      this.bAtelier = UI.btn({ x: 8, y: 574, w: 140, h: 54, icon: 'altar', label: t('atelier'), style: 'main', on: () => this.toAtelier() }),
+      this.bWave = UI.btn({ x: 156, y: 574, w: 196, h: 54, icon: 'play', label: '', style: 'green', on: () => this.startWave(false) }),
       this.bSpeed = UI.btn({ x: 300, y: 574, w: 52, h: 50, label: 'x1', style: 'dark', on: () => { this.speed = this.speed === 1 ? 2 : 1; } })
     ];
     this.pauseBtns = [
@@ -2038,6 +2056,7 @@ Scenes.crypt = {
     if (u.st.mut.soul && Math.random() < 0.4) { FX.text(u.x, FLOOR[u.room] - 50, t('dodge'), C.dim, 11); return; }
     if (melee && u.st.fly && Math.random() < 0.25) { FX.text(u.x, FLOOR[u.room] - 50, t('dodge'), C.dim, 11); return; }
     const c = u.cr;
+    if (u.hold && Math.abs(u.x - u.post) < 40) d *= D.holdDef; // la créature de tête tient la ligne : moins de dégâts à son poste
     c.dmg = (c.dmg || 0) + d; u.hurt = 0.15;
     FX.text(u.x + rnd(-6, 6), FLOOR[u.room] - 55, '-' + Math.round(d), '#ff8a8a', 12);
     // membre instable (surdose de sang) : perdu au premier coup
@@ -2141,6 +2160,20 @@ Scenes.crypt = {
     // apparition
     if (this.queue.length) { this.spawnT -= dt; if (this.spawnT <= 0) { this.spawn(this.queue.shift()); this.spawnT = this.gap * rnd(0.7, 1.3); } }
     const alive = this.heroes.filter(h => !h.dead);
+    // Tenue de ligne : sur chaque étage, la créature la plus proche de l'entrée garde son poste ; tout l'étage
+    // n'engage le combat que quand un héros arrive à sa hauteur (ou à portée de tir), pour que l'action
+    // se passe au milieu de l'écran et non contre le bord.
+    // Une fois engagé, l'étage reste au combat tant qu'il y a des héros dedans (un héros repoussé ne fait pas reculer tout le monde).
+    const eng = this.engaged = this.engaged || [false, false, false];
+    const engaged = [0, 1, 2].map(r => {
+      const mine = this.units.filter(u => !u.dead && u.room === r); if (!mine.length) return true;
+      const dir = ROOM_DIR[r], hold = mine.reduce((a, u) => u.post * dir < a.post * dir ? u : a);
+      mine.forEach(u => { u.hold = u === hold; });
+      const inRoom = alive.filter(h => h.room === r);
+      if (!inRoom.length) eng[r] = false;
+      else if (inRoom.some(h => (h.x - hold.post) * dir >= -(Math.max(h.range, 30) + 10))) eng[r] = true;
+      return eng[r];
+    });
     // créatures
     this.units.forEach(u => {
       u.atk = Math.max(0, u.atk - dt * 3); u.hurt = Math.max(0, (u.hurt || 0) - dt);
@@ -2154,11 +2187,12 @@ Scenes.crypt = {
       if (st.aura) this.units.forEach(o => { if (!o.dead && o.room === u.room) o.cr.dmg = Math.max(0, o.cr.dmg - st.aura * dt); });
       if (u.stun > 0) { u.stun -= dt; return; }
       const inRoom = alive.filter(h => h.room === u.room && !h.dead);
-      let tg = null, bd = 1e9; inRoom.forEach(h => { const d = Math.abs(h.x - u.x); if (d < bd) { bd = d; tg = h; } });
+      let tg = null, bd = 1e9; if (engaged[u.room]) inRoom.forEach(h => { const d = Math.abs(h.x - u.x); if (d < bd) { bd = d; tg = h; } });
       const spd = st.move * (st.mut.ice ? 0.6 : 1);
       if (tg) {
         u.flip = tg.x > u.x;
-        if (bd > st.range) u.x += Math.sign(tg.x - u.x) * spd * dt;
+        // la créature de tête ne quitte pas son poste (petite marge) : elle attend que les héros viennent à elle
+        if (bd > st.range) { const nx = u.x + Math.sign(tg.x - u.x) * spd * dt; if (!u.hold || Math.abs(nx - u.post) <= HOLD_LEASH || bd <= tg.range + 14) u.x = nx; } // sauf pour riposter à un héros qui la frappe
         else { u.cd -= dt; if (u.cd <= 0) { u.cd = st.rate; u.atk = 1; this.creatureAttack(u, tg); } }
       } else {
         u.cd = Math.max(0, u.cd - dt);
@@ -2188,7 +2222,7 @@ Scenes.crypt = {
       const dir = ROOM_DIR[h.room] || 1;
       let tg = null;
       const taunt = units.find(u => u.st.taunt && Math.abs(u.x - h.x) < 120);
-      if (h.range > 40) { let bd = 1e9; units.forEach(u => { const d = Math.abs(u.x - h.x); if (d <= h.range && d < bd) { bd = d; tg = u; } }); if (taunt && Math.abs(taunt.x - h.x) <= h.range) tg = taunt; }
+      if (h.range > 40) { let bd = 1e9; const rg = Math.min(h.range, RANGED_STOP); units.forEach(u => { const d = Math.abs(u.x - h.x); if (d <= rg && d < bd) { bd = d; tg = u; } }); if (taunt && Math.abs(taunt.x - h.x) <= h.range) tg = taunt; }
       else { tg = (taunt && (taunt.x - h.x) * dir > -12 && (taunt.x - h.x) * dir < h.range + 10) ? taunt : units.find(u => (u.x - h.x) * dir > -12 && (u.x - h.x) * dir < h.range + 10); }
       if (h.room === 0 && h.x < 24) tg = null; // à l'entrée, hors de portée des créatures : il avance d'abord
       if (tg) {
@@ -2219,7 +2253,7 @@ Scenes.crypt = {
   invade(h) {
     h.dead = true; h.deadT = 0; const dmg = h.boss ? 3 : 1;
     this.run.hp -= dmg; this.run.invaded = true;
-    FX.shake(6, 0.3); vib(80); Sfx.play('hurt'); FX.spark(322, FLOOR[2] - 30, C.red, 16, 140);
+    FX.shake(6, 0.3); Sfx.play('hurt'); FX.spark(322, FLOOR[2] - 30, C.red, 16, 140);
     Toast.show(t('invaded'), '#ff9a9a');
     if (this.run.hp <= 0) this.lose();
   },
@@ -2229,7 +2263,7 @@ Scenes.crypt = {
     const k = this.run.endless ? 10 + this.run.wave * 0.6 : this.run.night;
     const mul = 1 + D.trapDmgPerNight * (k - 1);
     this.trapCd[i] = tp.cd; this.trapAnim[i] = 0.5;
-    Sfx.play(type === 'brasero' ? 'fire' : 'trap'); vib(25);
+    Sfx.play(type === 'brasero' ? 'fire' : 'trap');
     const x = TRAP_X[i];
     let disarmed = false;
     if (type === 'brasero') this.zones.push({ room: i, x, t: tp.dur, dps: tp.burn * mul });
@@ -2248,7 +2282,7 @@ Scenes.crypt = {
     const fallen = this.units.filter(u => u.dead && u.room === room && u.revive <= 0);
     if (!fallen.length) { Toast.show(t('no_fallen')); Sfx.play('error'); return false; }
     fallen.forEach(u => { u.dead = false; u.cr.fallen = false; u.cr.dmg = u.st.hp * (1 - D.rallyHp); FX.bolt(u.x, ROOM_TOP[room], u.x, FLOOR[room] - 20, C.toxic, 0.4); FX.spark(u.x, FLOOR[room] - 20, C.toxic, 20, 140); });
-    this.gauge = 0; Sfx.play('power'); FX.flash = 0.4; vib(60);
+    this.gauge = 0; Sfx.play('power'); FX.flash = 0.4;
     return true;
   },
   collect(d) {
@@ -2282,7 +2316,7 @@ Scenes.crypt = {
     const first = S.cleared < n; S.cleared = Math.max(S.cleared, n);
     S.creatures.forEach(c => { c.dmg = 0; c.fallen = false; });
     S.run = null; this.phase = 'result'; this.result = { stars, souls, first, n };
-    Sfx.play('win'); vib([50, 50, 100]);
+    Sfx.play('win');
     const bw = 150;
     this.endBtns = [UI.btn({ x: W / 2 - bw / 2, y: 430, w: bw, h: 52, label: n === 10 && !S.titan ? t('build_titan') : t('continue'), style: 'green', on: () => {
       if (n === 10 && !S.titan) go('atelier', { titan: true }); else go('map');
@@ -2292,7 +2326,8 @@ Scenes.crypt = {
   lose() {
     this.phase = 'lost'; Sfx.play('lose');
     const endless = this.run.endless;
-    if (endless) { S.endless = Math.max(S.endless || 0, this.run.wave); S.souls += this.run.kills; }
+    if (endless) S.endless = Math.max(S.endless || 0, this.run.wave);
+    S.souls += this.run.kills; // les âmes des héros tués restent acquises, même en cas de défaite
     S.creatures.forEach(c => { c.dmg = 0; c.fallen = false; });
     this.drops.forEach(d => { if (d.p && S.inv.indexOf(d.p) < 0) S.inv.push(d.p); }); this.drops = [];
     this.lost.forEach(p => { if (S.inv.indexOf(p) < 0) Logic.invAdd(p); }); this.lost = [];
@@ -2609,6 +2644,7 @@ Scenes.crypt = {
       Art.icon('skull', W / 2, 220, 70);
       txt(this.run.endless ? t('endless_over') : t('crypt_fell'), W / 2, 290, 20, '#ff9a9a');
       txtWrap(this.run.endless ? t('endless_score', { n: this.run.wave }) : t('lost_tip'), W / 2, 330, 250, 13, C.dim);
+      if (this.run.kills) { Art.icon('soul', W / 2 - 34, 392, 22); txt('+' + this.run.kills, W / 2 - 18, 393, 17, C.toxic, 'left'); }
     } else {
       const r = this.result;
       txt(t('night_won', { n: r.n }), W / 2, 185, 22, C.toxic);
@@ -2702,7 +2738,14 @@ const DEMO = { back: { k: 'm_wings', r: 0 }, head: { k: 'g_head', r: 1 }, torso:
 Scenes.splash = {
   enter() { this.t = 0; this.ready = false; },
   update(dt) { this.t += dt; if (!this.ready && (Art.progress() >= 1 || this.t > 10) && this.t > 0.6) { this.ready = true; this.readyT = this.t; } },
-  up() { if (this.ready) { Sfx.play('tap'); go('menu'); } },
+  up(p) {
+    if (!this.ready) return;
+    Sfx.play('tap');
+    if (p && p.y > 600) { go('notes', { back: 'splash' }); return; }
+    // après une mise à jour, les joueurs qui ont déjà une partie voient d'abord les nouveautés
+    if ((S.tuto > 0 || S.cleared > 0) && pnSeen() !== PN[0].v) { go('notes', { start: true }); return; }
+    pnMark(); startGame();
+  },
   draw() {
     const im = Art.img('bg_splash');
     if (im) {
@@ -2717,8 +2760,7 @@ Scenes.splash = {
     }
     const a = Math.min(1, this.t * 1.5);
     ctx.globalAlpha = a;
-    txt(t('title1'), W / 2, 78, 32, C.text, 'center', { sw: 7 });
-    txt(t('title2'), W / 2, 116, 26, C.toxic, 'center', { sw: 6 });
+    drawTitle(W / 2, 74);
     if (!this.ready) {
       const p = Art.progress();
       rr(80, 560, 200, 12, 6); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -2727,49 +2769,104 @@ Scenes.splash = {
     } else {
       ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin((this.t - this.readyT) * 3.5));
       txt(t('tap_start'), W / 2, 572, 18, C.bone, 'center', { sw: 5 });
+      ctx.globalAlpha = a;
+      txt('v' + PN[0].v + ' · ' + t('tap_notes'), W / 2, 620, 11, 'rgba(236,224,195,0.7)', 'center', { sw: 3 });
     }
     ctx.globalAlpha = 1;
   }
 };
-Scenes.menu = {
-  enter() {
-    const has = Save.exists() && (S.tuto > 0 || S.cleared > 0);
-    const bh = UI.bigH(52);
-    this.btns = [
-      UI.btn({ x: 70, y: 380, w: 220, h: bh, label: has ? t('continue') : t('play'), style: 'green', size: 19, on: () => this.play() }),
-      UI.btn({ x: 70, y: 380 + bh + 12, w: 220, h: bh, icon: 'book', label: t('bestiary'), style: 'main', on: () => go('bestiary', { back: 'menu' }) }),
-      UI.btn({ x: 70, y: 380 + (bh + 12) * 2, w: 220, h: bh, icon: 'gear', label: t('settings'), style: 'main', on: () => go('settings', { back: 'menu' }) })
-    ];
-    Sfx.Music.set('crypt');
+// Titre du jeu : police Creepster (fonts/, licence OFL), rendu une fois dans une image puis réutilisé
+const titleFont = { ok: false };
+try { const ff = new FontFace('Creepster', 'url(fonts/Creepster-Regular.ttf)'); ff.load().then(f => { document.fonts.add(f); titleFont.ok = true; titleFont.cv = null; }).catch(() => {}); } catch (_) {}
+function drawTitle(cx, y) {
+  const key = S.lang + titleFont.ok;
+  if (!titleFont.cv || titleFont.key !== key) {
+    const R = 3, cw = 360, ch = 120, cv = document.createElement('canvas'); cv.width = cw * R; cv.height = ch * R;
+    const g = cv.getContext('2d'); g.scale(R, R); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    const fam = titleFont.ok ? 'Creepster' : 'bold ' + FONT;
+    [[t('title1').toUpperCase(), 44, 32, ['#ffffff', '#e6d9ff', '#9d7fd0'], 'rgba(170,120,255,0.65)', '#3a2160'],
+     [t('title2').toUpperCase(), 34, 80, ['#f2ffd0', '#9dff5a', '#2fa51a'], 'rgba(125,255,74,0.75)', '#1d4a12']].forEach(([s, size, ly, cols, glow, rim]) => {
+      let sz = size; const f = n => (titleFont.ok ? '' : 'bold ') + n + 'px ' + (titleFont.ok ? 'Creepster' : FONT);
+      g.font = f(sz); while (g.measureText(s).width > 330 && sz > 12) g.font = f(--sz);
+      g.save(); g.shadowColor = glow; g.shadowBlur = 20; g.fillStyle = '#000'; g.fillText(s, 180, ly); g.restore();
+      g.lineWidth = 10; g.strokeStyle = '#120818'; g.strokeText(s, 180, ly + 4); g.strokeText(s, 180, ly);
+      g.lineWidth = 4; g.strokeStyle = rim; g.strokeText(s, 180, ly);
+      const gr = g.createLinearGradient(0, ly - sz / 2, 0, ly + sz / 2); gr.addColorStop(0, cols[0]); gr.addColorStop(0.45, cols[1]); gr.addColorStop(1, cols[2]);
+      g.fillStyle = gr; g.fillText(s, 180, ly);
+    });
+    titleFont.cv = cv; titleFont.key = key;
+  }
+  // lueur verte qui respire derrière le titre
+  Art.glowAt(cx, y + 20, 150, 'rgba(125,255,74,' + (0.10 + 0.05 * Math.sin(time * 2)).toFixed(3) + ')');
+  ctx.drawImage(titleFont.cv, cx - 180, y - 32, 360, 120);
+}
+
+// Lancement de la partie depuis l'écran titre : tutoriel, nuit en cours ou carte
+function startGame() {
+  if (S.tuto === 0 && S.cleared === 0) { go('crypt', { night: 1 }); return; }
+  if (S.tuto > 0 && S.tuto < 99) {
+    if (S.tuto >= 3 && S.tuto <= 6) { go('atelier', { from: 'crypt' }); return; }
+    go('crypt', S.run ? { resume: true } : { night: 1 }); return;
+  }
+  go('map');
+}
+
+// ============================== Notes de mise à jour (la plus récente en premier) ==============================
+const PN = [
+  { v: '1.0', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['Première version : dix nuits pour défendre la crypte jusqu\'à la cathédrale, et le Titan d\'Os à coudre.',
+      'Assemble tes créatures à l\'atelier avec les restes des héros, couds les jointures et broie les pièces en trop.',
+      'Pièges, fluides, autel et grimoires à débloquer à la boutique, et un bestiaire à compléter.',
+      'Les âmes servent tout le jeu : chaque couture, réparation et dose de fluide a son prix.',
+      'En combat, la créature de tête de chaque étage tient son poste ; la seconde charge quand les héros arrivent à sa hauteur.',
+      'Jouable hors ligne, en français et en anglais, sans pub ni achat.'],
+    en: ['First release: ten nights defending the crypt all the way to the cathedral, and the Bone Titan to stitch.',
+      'Build your creatures in the workshop from heroes\' remains, sew the joints and grind spare parts.',
+      'Traps, fluids, altar and grimoires to unlock in the shop, and a bestiary to fill.',
+      'Souls matter all game long: every stitch, repair and fluid dose has a price.',
+      'In battle, the front creature of each floor holds its post; the second one charges when heroes reach it.',
+      'Playable offline, in French and English, with no ads and no purchases.'] }
+];
+const PN_KEY = 'necro_crypte_pn';
+function pnSeen() { try { return localStorage.getItem(PN_KEY); } catch (_) { return PN[0].v; } }
+function pnMark() { try { localStorage.setItem(PN_KEY, PN[0].v); } catch (_) {} }
+Scenes.notes = {
+  enter(arg) {
+    this.arg = arg || {}; this.scroll = 0; pnMark();
+    this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => this.close() });
   },
-  play() {
-    if (S.tuto === 0 && S.cleared === 0) { go('crypt', { night: 1 }); return; }
-    if (S.tuto > 0 && S.tuto < 99) {
-      if (S.tuto >= 3 && S.tuto <= 6) { go('atelier', { from: 'crypt' }); return; }
-      go('crypt', S.run ? { resume: true } : { night: 1 }); return;
-    }
-    go('map');
-  },
+  close() { if (this.arg.start) startGame(); else go(this.arg.back || 'splash', this.arg.backArg); },
   update() {},
   draw() {
     bgNight();
-    // lune
-    Art.glowAt(305, 190, 60, 'rgba(200,255,180,0.15)');
-    if (!Art.deco('deco_moon', 305, 190, 60)) {
-      ctx.fillStyle = '#e8f5d8'; ctx.beginPath(); ctx.arc(305, 190, 24, 0, 7); ctx.fill();
-      ctx.fillStyle = '#1b0f2c'; ctx.beginPath(); ctx.arc(316, 183, 21, 0, 7); ctx.fill();
-    }
-    graveyard(330);
-    Art.glowAt(180, 250, 120, 'rgba(125,255,74,0.18)');
-    Art.creature(DEMO, 180, 240, 52, { t: time });
-    txt(t('title1'), W / 2, 70, 30, C.text, 'center', { sw: 6 });
-    txt(t('title2'), W / 2, 106, 24, C.toxic, 'center', { sw: 5 });
-    txt(t('tagline'), W / 2, 136, 12, C.dim);
-    UI.draw(this.btns);
-    txt('v1.0 · ' + t('no_ads'), W / 2, 628, 10, 'rgba(165,150,191,0.5)', 'center', { stroke: false });
+    let y = 70 - this.scroll; const fr = S.lang === 'fr';
+    PN.forEach(p => {
+      const lines = (fr ? p.fr : p.en).map(l => wrap(l, 290, 12));
+      const h = 44 + lines.reduce((a, l) => a + l.length * 16 + 8, 0);
+      panel(10, y, 340, h, C.panel, 10);
+      txt(t('notes_version') + ' ' + p.v, 24, y + 20, 15, C.toxic, 'left');
+      txt(p.d[fr ? 0 : 1], 336, y + 20, 11, C.dim, 'right', { stroke: false });
+      let ly = y + 44;
+      lines.forEach(ls => {
+        ctx.fillStyle = C.bone; ctx.beginPath(); ctx.arc(28, ly + 1, 2.5, 0, 7); ctx.fill();
+        ls.forEach((l, i) => txt(l, 38, ly + i * 16, 12, C.text, 'left', { stroke: false }));
+        ly += ls.length * 16 + 8;
+      });
+      y += h + 10;
+    });
+    this.maxScroll = Math.max(0, y + this.scroll - 600);
+    if (this.arg.start) { const b = UI.btn({ x: 90, y: 568, w: 180, h: 48, label: t('continue'), style: 'green' }); this.go = b; UI.drawBtn(b); } else this.go = null;
+    topBar(52);
+    banner(t('notes_title'), 180, 25, 17);
+    UI.drawBtn(this.back);
   },
-  down(p) { UI.down(this.btns, p); },
-  up(p) { UI.up(this.btns, p); }
+  down(p) { this.dragY = p.y; this.s0 = this.scroll; this.moved = false; UI.down([this.back], p); },
+  move(p) { if (this.dragY == null) return; const d = this.dragY - p.y; if (Math.abs(d) > 6) this.moved = true; this.scroll = clamp(this.s0 + d, 0, this.maxScroll || 0); },
+  up(p) {
+    this.dragY = null;
+    if (UI.pressed) { UI.up([this.back], p); return; }
+    const b = this.go; if (b && !this.moved && p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) { Sfx.play('tap'); startGame(); }
+  }
 };
 
 // ============================== Scène : Carte des nuits ==============================
@@ -2778,9 +2875,9 @@ Scenes.map = {
   enter() {
     this.sel = null;
     Hint.clear();
-    const bw = 84, y = 566, bh = UI.bigH(46);
+    const bw = 84, y = 566, bh = 46;
     this.btns = [
-      UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('menu') }),
+      UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('splash') }),
       UI.btn({ x: 6, y, w: bw, h: bh, icon: 'altar', label: '', sub: true, style: 'main', on: () => go('atelier', { from: 'map' }) }),
       UI.btn({ x: 94, y, w: bw, h: bh, icon: 'shop', label: '', sub: true, style: 'gold', on: () => go('shop'), badge: this.canBuy() ? '!' : null }),
       UI.btn({ x: 182, y, w: bw, h: bh, icon: 'book', label: '', sub: true, style: 'main', on: () => go('bestiary', { back: 'map' }) }),
@@ -2909,10 +3006,10 @@ Scenes.shop = {
     if (S.souls < it.cost) { Toast.show(t('not_enough')); Sfx.play('error'); return; }
     S.souls -= it.cost;
     if (cat === 'trap') S.owned.traps[id] = 1;
-    if (cat === 'fluid') { S.owned.fluids[id] = 1; S.stock[id] = D.fluidStock; }
+    if (cat === 'fluid') S.owned.fluids[id] = 1;
     if (cat === 'altar') S.owned.altar = +id;
     if (cat === 'grim') S.owned.grim[id] = 1;
-    Sfx.play('coin'); vib(30); Toast.show(t('bought'), C.toxic); FX.spark(300, 24, C.toxic, 16, 100);
+    Sfx.play('coin'); Toast.show(t('bought'), C.toxic); FX.spark(300, 24, C.toxic, 16, 100);
     Save.save();
   },
   items() { return D.shop; },
@@ -3058,7 +3155,7 @@ Scenes.grinder = {
     if (ch.some(p => p.r >= 1) && time - this.confirm > 3) { this.confirm = time; Toast.show(t('gr_confirm'), C.legend); return; }
     let g = 0; ch.forEach(p => { g += D.grindSouls[p.r]; Logic.invRemove(p); });
     S.souls += g; this.sel.clear(); this.confirm = -1e9;
-    Sfx.play('grind'); vib(40); FX.spark(W / 2, 600, C.bone, 30, 160); FX.text(W / 2, 560, '+' + g, C.toxic, 22);
+    Sfx.play('grind'); FX.spark(W / 2, 600, C.bone, 30, 160); FX.text(W / 2, 560, '+' + g, C.toxic, 22);
     this.scroll = clamp(this.scroll, 0, this.maxScroll());
     Save.save();
   },
@@ -3131,11 +3228,10 @@ Scenes.grinder = {
 // ============================== Scène : Réglages ==============================
 Scenes.settings = {
   enter(arg) {
-    this.backTo = (arg && arg.back) || 'menu'; this.confirm = -1e9;
+    this.backTo = (arg && arg.back) || 'map'; this.confirm = -1e9;
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go(this.backTo, { resume: true }) });
     this.rows = [
-      { k: 'lang', icon: 'flag' }, { k: 'sound', icon: 'sound' }, { k: 'music', icon: 'music' }, { k: 'vib', icon: 'vib' },
-      { k: 'auto', icon: 'auto' }, { k: 'big', icon: 'big' }, { k: 'easy', icon: 'needle' }
+      { k: 'lang', icon: 'flag' }, { k: 'sound', icon: 'sound' }, { k: 'music', icon: 'music' }, { k: 'notes', icon: 'book' }
     ];
   },
   update() {},
@@ -3149,8 +3245,9 @@ Scenes.settings = {
       panel(10, y, 340, 54, C.panel, 10);
       Art.icon(r.icon, 38, y + 27, 30);
       txt(t('set_' + r.k), 64, y + 20, 15, C.text, 'left');
-      txt(t('setd_' + r.k), 64, y + 39, 10, C.dim, 'left', { stroke: false });
-      if (r.k === 'lang') { rr(262, y + 11, 78, 32, 10); ctx.fillStyle = C.violet; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke(); txt(S.lang === 'fr' ? 'Français' : 'English', 301, y + 28, 12); }
+      txt(r.k === 'notes' ? 'v' + PN[0].v + ' · ' + PN[0].d[S.lang === 'fr' ? 0 : 1] : t('setd_' + r.k), 64, y + 39, 10, C.dim, 'left', { stroke: false });
+      if (r.k === 'notes') txt('›', 322, y + 26, 30, C.bone);
+      else if (r.k === 'lang') { rr(262, y + 11, 78, 32, 10); ctx.fillStyle = C.violet; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke(); txt(S.lang === 'fr' ? 'Français' : 'English', 301, y + 28, 12); }
       else {
         const on = S.set[r.k];
         rr(282, y + 13, 56, 28, 14); ctx.fillStyle = on ? C.toxicD : '#3a3044'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -3167,15 +3264,16 @@ Scenes.settings = {
     if (UI.pressed) { UI.up([this.back], p); return; }
     this.rows.forEach((r, i) => {
       const y = this.rowY(i); if (p.y < y || p.y > y + 54) return;
+      if (r.k === 'notes') { Sfx.play('tap'); go('notes', { back: 'settings', backArg: { back: this.backTo } }); return; }
       if (r.k === 'lang') S.lang = S.lang === 'fr' ? 'en' : 'fr';
       else S.set[r.k] = !S.set[r.k];
       if (r.k === 'music') Sfx.Music.apply();
-      Sfx.play('tap'); vib(10); Save.save(); this.enter({ back: this.backTo });
+      Sfx.play('tap'); Save.save(); this.enter({ back: this.backTo });
     });
     const y = this.rowY(this.rows.length) + 10;
     if (p.y > y && p.y < y + 44 && p.x > 90 && p.x < 270) {
       if (time - this.confirm > 3) { this.confirm = time; Sfx.play('error'); }
-      else { Save.reset(); Scenes.crypt.run = null; Toast.show(t('reset_done')); goNow('menu'); }
+      else { Save.reset(); Scenes.crypt.run = null; Toast.show(t('reset_done')); goNow('splash'); }
     }
   }
 };
@@ -3186,8 +3284,8 @@ Scenes.ending = {
   update(dt) {
     this.t += dt;
     const step = Math.floor(this.t / 0.8);
-    if (this.t < 5 && step !== this.lastStep) { this.lastStep = step; FX.shake(3, 0.15); Sfx.play('hit'); vib(30); }
-    if (this.t > 5.6 && !this.broke) { this.broke = true; FX.shake(14, 1); FX.flash = 1; Sfx.play('boom'); vib([100, 50, 200]); for (let i = 0; i < 30; i++) FX.spark(300, 380, pick(['#8a6a3a', '#ffe9a0', C.stone]), 2, 260, 1.2); }
+    if (this.t < 5 && step !== this.lastStep) { this.lastStep = step; FX.shake(3, 0.15); Sfx.play('hit'); }
+    if (this.t > 5.6 && !this.broke) { this.broke = true; FX.shake(14, 1); FX.flash = 1; Sfx.play('boom'); for (let i = 0; i < 30; i++) FX.spark(300, 380, pick(['#8a6a3a', '#ffe9a0', C.stone]), 2, 260, 1.2); }
     if (this.t > 9) this.btn.show = true;
   },
   draw() {
@@ -3274,7 +3372,8 @@ Save.load();
 try { const ql = new URLSearchParams(location.search).get('lang'); if (ql === 'fr' || ql === 'en') { S.lang = ql; Save.save(); } } catch (_) {}
 resize();
 document.title = t('title1') + ' ' + t('title2');
-goNow(/[?&]nosplash/.test(location.search) ? 'menu' : 'splash');
+goNow('splash');
+if (/[?&]nosplash/.test(location.search)) startGame();
 requestAnimationFrame(frame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { if (scene === Scenes.crypt && Scenes.crypt.phase === 'wave') Scenes.crypt.paused = true; Save.save(); } });
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic|usercontent/.test(location.hostname)) {

@@ -7,7 +7,9 @@ window.GAME_DATA = {
   creatureBase: { hp: 20, str: 2, mag: 0, spd: 0, def: 0 },
   maxCreatures: 6,
   cryptHp: 10,
-  fluidStock: 3,                    // doses par fluide et par nuit
+  sewCost: [2, 5, 12],              // âmes par couture, selon la rareté de la pièce
+  repairK: 0.4,                     // réparation complète = 40 % du prix des coutures de la créature
+  doseCost: { blood: 3, poison: 3, ice: 4, fire: 5, lightning: 6, soul: 10 },  // âmes par dose de fluide
   soulGaugeKill: 10, soulGaugeBoss: 35,
   rallyHp: 0.3,                     // Rappel d'os : PV rendus
   starSouls: 10,                    // âmes par étoile gagnée
@@ -171,5 +173,6 @@ window.GAME_DATA = {
   ],
 
   sew: { tol: 12, perfect: 5, good: 10, minCover: 0.8, easyMul: 1.8, tutoMul: 2.6 },
+  holdDef: 0.65,             // dégâts reçus par la créature de tête à son poste
   inoculateTime: 0.8               // secondes par dose en maintenant le doigt
 };
