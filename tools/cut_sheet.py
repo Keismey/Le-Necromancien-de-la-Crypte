@@ -99,6 +99,8 @@ def main():
         f.write('window.ASSET_LIST = ' + json.dumps(lst) + ';\n')
         mus = sorted(f2[6:-4] for f2 in os.listdir(out) if f2.startswith('music_') and f2.endswith('.mp3'))
         f.write('window.MUSIC_LIST = ' + json.dumps(mus) + ';\n')
+        sfx = sorted(f2[4:-4] for f2 in os.listdir(out) if f2.startswith('sfx_') and f2.endswith('.mp3'))
+        f.write('window.SFX_LIST = ' + json.dumps(sfx) + ';\n')
     print(len(lst), 'images listées')
 
 

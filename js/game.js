@@ -6,7 +6,8 @@
 const D = window.GAME_DATA, LANG = window.LANG;
 
 // ============================== Core ==============================
-const W = 360, H = 640;
+const W = 360; let H = 640;
+const OY = () => Math.round((H - 640) / 2); // décalage pour centrer un contenu prévu en 640 de haut // H grandit (jusqu'à 760) dans les scènes « tall » sur les téléphones allongés
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 let view = { s: 1, ox: 0, oy: 0, dpr: 1 };
@@ -19,6 +20,8 @@ function resize() {
   const iw = window.innerWidth, ih = window.innerHeight;
   cv.width = Math.round(iw * dpr); cv.height = Math.round(ih * dpr);
   cv.style.width = iw + 'px'; cv.style.height = ih + 'px';
+  const want = scene && scene.tall ? Math.max(640, Math.min(760, Math.round(ih / iw * W))) : 640;
+  if (want !== H) { H = want; if (scene && scene.relayout) scene.relayout(); }
   const s = Math.min(iw / W, ih / H);
   view = { s, ox: (iw - W * s) / 2, oy: (ih - H * s) / 2, dpr };
 }
@@ -76,7 +79,7 @@ function go(name, arg) {
 }
 function goNow(name, arg) {
   if (scene && scene.exit) scene.exit();
-  scene = Scenes[name]; scene.id = name;
+  scene = Scenes[name]; scene.id = name; resize();
   UI.pressed = null; Toast.list = [];
   if (scene.enter) scene.enter(arg);
 }
@@ -103,7 +106,7 @@ function newState() {
     best: { creatures: [], recipes: {}, heroes: {}, made: 0 },
     tuto: 0,                    // étape du tutoriel (99 = fini)
     run: null,                  // nuit en cours (pour reprendre)
-    titan: false, endless: 0,
+    titan: false, endless: 0, introSeen: 0,
     hints: {}
   };
 }
@@ -153,8 +156,11 @@ const Sfx = (function () {
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       Music.apply();
+      // échantillons enregistrés (assets/sfx_<nom>.mp3, listés dans js/assets.js) : ils remplacent les sons synthétisés
+      (window.SFX_LIST || []).forEach(n => fetch('assets/sfx_' + n + '.mp3').then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(buf => { samples[n] = buf; }).catch(() => {}));
     } catch (_) { ac = null; }
   }
+  const samples = {};
   function env(g, t0, a, d, v) {
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(v, t0 + a);
@@ -199,7 +205,9 @@ const Sfx = (function () {
     boom: () => { noise(120, 0.8, 0.9, 0.7, 0, 'lowpass'); tone('sine', 90, 30, 0.8, 0.4); }
   };
   function play(name) {
-    if (!ac || !S || !S.set.sound || !lib[name]) return;
+    if (!ac || !S || !S.set.sound) return;
+    if (samples[name]) { try { const s = ac.createBufferSource(); s.buffer = samples[name]; s.playbackRate.value = 0.94 + Math.random() * 0.12; s.connect(master); s.start(); } catch (_) {} return; }
+    if (!lib[name]) return;
     try { lib[name](); } catch (_) {}
   }
   // Musique procédurale (en attendant les musiques générées)
@@ -257,7 +265,9 @@ const C = {
   red: '#d22b3a', stone: '#7a7482', stoneD: '#4e4956', bg: '#140b1e', panel: '#24163a', panelL: '#352252',
   text: '#f3eaff', dim: '#a596bf', rare: '#4aa8ff', legend: '#ffb627'
 };
-const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+// police d'interface : Fredoka (ronde et épaisse, licence OFL), avec repli système le temps qu'elle charge
+const FONT = 'Fredoka, "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+try { const uf = new FontFace('Fredoka', 'url(fonts/Fredoka.ttf)', { weight: '300 700', stretch: '75% 125%' }); uf.load().then(f => { document.fonts.add(f); if (Scenes.crypt) Scenes.crypt.bg = null; }).catch(() => {}); } catch (_) {}
 function font(size, bold) { return (bold === false ? '' : 'bold ') + size + 'px ' + FONT; }
 function txt(s, x, y, size, color, align, opt) {
   opt = opt || {};
@@ -447,8 +457,8 @@ const Hint = {
   update(dt) { if (this.cur) this.cur.t += dt; },
   draw() {
     const h = this.cur; if (!h) return;
-    const by = h.boxY !== undefined ? h.boxY : (h.y > 330 ? h.y - 130 : h.y + 60);
     const lines = wrap(h.text, 280, 15); const bh = lines.length * 19 + 18;
+    const by = h.boxBottom !== undefined ? h.boxBottom - bh : h.boxY !== undefined ? h.boxY : (h.y > 330 ? h.y - 130 : h.y + 60);
     ctx.globalAlpha = Math.min(1, h.t * 3);
     panel(30, by, 300, bh, 'rgba(36,22,58,0.96)', 12);
     ctx.strokeStyle = C.toxic; ctx.lineWidth = 2; rr(30, by, 300, bh, 12); ctx.stroke();
@@ -465,7 +475,13 @@ const Hint = {
 
 // ============================== FX (particules, textes flottants, secousse) ==============================
 const FX = {
-  parts: [], texts: [], bolts: [], shakeT: 0, shakeA: 0, flash: 0,
+  parts: [], texts: [], bolts: [], debris: [], wisps: [], shakeT: 0, shakeA: 0, flash: 0, stop: 0,
+  // arrêt sur image très court sur les gros coups (donne du poids à l'impact)
+  hitStop(t) { this.stop = Math.max(this.stop, t); },
+  // membres qui volent quand une créature tombe
+  fling(piece, x, y, size) { this.debris.push({ p: piece, x, y, size, vx: rnd(-90, 90), vy: rnd(-220, -140), rot: 0, vr: rnd(-9, 9), t: 0, life: 1.1 }); },
+  // âme qui file d'un héros vaincu vers une cible (jauge du Rappel d'os)
+  wisp(x, y, tx, ty, onArrive) { this.wisps.push({ x0: x, y0: y, x, y, tx, ty, t: 0, life: rnd(0.55, 0.75), cx: x + rnd(-60, 60), cy: Math.min(y, ty) - rnd(40, 90), on: onArrive }); },
   spark(x, y, col, n, spd, life) {
     for (let i = 0; i < (n || 10); i++) {
       const a = Math.random() * 6.283, v = rnd(0.3, 1) * (spd || 120);
@@ -477,10 +493,13 @@ const FX = {
   },
   // textes flottants : un nouveau texte ne se pose jamais sur un autre encore lisible (sinon les dégâts deviennent illisibles)
   text(x, y, s, col, size) {
+    // dégâts répétés sur une même cible : on cumule dans un seul chiffre au lieu d'empiler
+    const num = /^-\d+$/.test(s) ? +s : 0;
+    if (num) { const o = this.texts.find(o => o.num && o.col === (col || C.text) && o.t < 0.45 && Math.abs(o.x - x) < 26 && Math.abs(o.y - y) < 34); if (o) { o.num += num; o.s = String(o.num); o.t = Math.min(o.t, 0.12); o.pop = 0.15; return; } }
     const near = this.texts.filter(o => o.t < 0.6 && Math.abs(o.x - x) < 30 && Math.abs(o.y - y) < 40);
     if (near.length >= 4) return;
     let ny = y; for (let i = 0; i < 4 && near.some(o => Math.abs(o.y - ny) < (size || 14)); i++) ny -= (size || 14) + 1;
-    this.texts.push({ x: x + (near.length % 2 ? 8 : -8) * (near.length ? 1 : 0), y: ny, s, col: col || C.text, t: 0, size: size || 14 });
+    this.texts.push({ x: x + (near.length % 2 ? 8 : -8) * (near.length ? 1 : 0), y: ny, s, col: col || C.text, t: 0, size: size || 14, num });
   },
   bolt(x1, y1, x2, y2, col, life) {
     const pts = []; const n = 9;
@@ -492,13 +511,24 @@ const FX = {
     this.parts.forEach(p => { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; });
     this.parts = this.parts.filter(p => p.t < p.life);
     if (this.parts.length > 260) this.parts.splice(0, this.parts.length - 260);
-    this.texts.forEach(p => { p.t += dt; p.y -= 26 * dt; });
+    this.texts.forEach(p => { p.t += dt; p.y -= 26 * dt; if (p.pop) p.pop = Math.max(0, p.pop - dt); });
     this.texts = this.texts.filter(p => p.t < 1);
     this.bolts.forEach(b => b.t += dt); this.bolts = this.bolts.filter(b => b.t < b.life);
+    this.debris.forEach(d => { d.t += dt; d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 520 * dt; d.rot += d.vr * dt; }); this.debris = this.debris.filter(d => d.t < d.life);
+    this.wisps.forEach(w => {
+      w.t += dt; const k = Math.min(1, w.t / w.life), e = k * k, u = 1 - e;
+      w.x = u * u * w.x0 + 2 * u * e * w.cx + e * e * w.tx; w.y = u * u * w.y0 + 2 * u * e * w.cy + e * e * w.ty;
+      if (Math.random() < 0.7) this.parts.push({ x: w.x, y: w.y, vx: rnd(-10, 10), vy: rnd(-10, 10), life: 0.3, t: 0, col: C.toxic, r: rnd(1.5, 2.5), g: 0 });
+      if (k >= 1 && !w.done) { w.done = true; this.spark(w.tx, w.ty, C.toxic, 6, 70, 0.4); if (w.on) w.on(); }
+    });
+    this.wisps = this.wisps.filter(w => !w.done);
     this.shakeT = Math.max(0, this.shakeT - dt); if (!this.shakeT) this.shakeA = 0;
     this.flash = Math.max(0, this.flash - dt * 2);
   },
   draw() {
+    this.debris.forEach(d => { ctx.globalAlpha = Math.min(1, (d.life - d.t) * 4); Art.piece(d.p, d.x, d.y, d.size, { rot: d.rot, noGlow: true }); });
+    ctx.globalAlpha = 1;
+    this.wisps.forEach(w => { Art.glowAt(w.x, w.y, 16, 'rgba(125,255,74,0.6)'); ctx.fillStyle = '#e6ffd8'; ctx.beginPath(); ctx.arc(w.x, w.y, 3.5, 0, 7); ctx.fill(); });
     this.parts.forEach(p => {
       const a = 1 - p.t / p.life; ctx.globalAlpha = p.puff ? a * 0.5 : a;
       ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (p.puff ? 1 + p.t : 1), 0, 7); ctx.fill();
@@ -513,10 +543,10 @@ const FX = {
       });
     });
     ctx.globalAlpha = 1;
-    this.texts.forEach(p => { ctx.globalAlpha = 1 - p.t; txt(p.s, p.x, p.y, p.size, p.col); });
+    this.texts.forEach(p => { ctx.globalAlpha = 1 - p.t; txt(p.s, p.x, p.y, Math.round(p.size * (1 + (p.pop || 0) * 2)), p.col); });
     ctx.globalAlpha = 1;
   },
-  clear() { this.parts = []; this.texts = []; this.bolts = []; }
+  clear() { this.parts = []; this.texts = []; this.bolts = []; this.debris = []; this.wisps = []; this.stop = 0; }
 };
 
 // ============================== Art (dessins procéduraux en attendant les planches Gemini) ==============================
@@ -1225,6 +1255,7 @@ const ALT = {
   back:  { x: 292, y: 142, s: 66, j: [212, 210] },
   core:  { x: 68,  y: 142, s: 54, j: [180, 250] }
 };
+const GHOST = { torso: 'p_ribs', head: 'p_skull', arm: 'p_arm', legs: 'w_legs', back: 'm_wings', core: 'p_heart' };
 const BIN = { x: 34, y: 404, r: 26 };
 const LEVER = { x: 334, y0: 292, y1: 404 };
 const DRAWER_Y = 512, CELL = 50, ROSTER_Y = 50;
@@ -1731,6 +1762,9 @@ Scenes.atelier = {
     if (!pc) {
       const can = this.drag && Logic.fits(this.drag.p, s);
       const snap = this.drag && this.drag.snap === s;
+      // silhouette fantôme de la pièce attendue : on voit d'un coup d'œil ce qui va où
+      const gk = GHOST[D.slotType[s]];
+      if (gk) { ctx.save(); ctx.globalAlpha = can ? 0.34 : 0.2; Art.tinted(a.x, a.y + a.s * 0.7, a.s * 1.4, a.s * 1.4, '#cfc6ff', () => Art.piece({ k: gk, r: 0, q: null }, 0, -a.s * 0.7, a.s * 0.82, { noGlow: true, flip: s.startsWith('arm') && a.x > 180 })); ctx.restore(); }
       ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = snap ? 4 : 2.5;
       ctx.strokeStyle = snap ? C.toxic : can ? 'rgba(125,255,74,0.8)' : 'rgba(236,224,195,0.35)';
       ctx.beginPath(); ctx.arc(a.x, a.y, a.s * 0.42, 0, 7); ctx.stroke(); ctx.restore();
@@ -1912,21 +1946,28 @@ Scenes.atelier = {
 function P0(parts) { return !!parts.torso; }
 
 // ============================== Scène : Crypte (défense) ==============================
-const ROOM_TOP = [54, 202, 350], ROOM_H = 148;
-const FLOOR = ROOM_TOP.map(y => y + 132);
-const PATH = [[-14, FLOOR[0], 0], [318, FLOOR[0], 0], [336, FLOOR[1], -1], [28, FLOOR[1], 1], [22, FLOOR[2], -1], [298, FLOOR[2], 2]];
-const SEGS = []; let PATH_LEN = 0;
-for (let i = 1; i < PATH.length; i++) {
-  const a = PATH[i - 1], b = PATH[i], l = dist(a[0], a[1], b[0], b[1]);
-  SEGS.push({ a, b, l, s0: PATH_LEN, room: b[2] }); PATH_LEN += l;
+// Géométrie de la crypte : recalculée selon la hauteur de l'écran (les étages profitent des téléphones allongés)
+let ROOM_TOP, ROOM_H, FLOOR, PATH, SEGS, PATH_LEN, ROOM_S0, BAR_Y, UNIT_K = 1;
+const POWER = { x: 40, y: 580, r: 28 };
+function cryptLayout() {
+  const dh = Math.floor((H - 640) * 0.8 / 3);
+  ROOM_H = 158 + dh; ROOM_TOP = [54, 54 + ROOM_H, 54 + 2 * ROOM_H]; FLOOR = ROOM_TOP.map(y => y + ROOM_H - 16);
+  BAR_Y = 54 + 3 * ROOM_H; UNIT_K = Math.min(1.15, ROOM_H / 158); POWER.y = H - 60;
+  PATH = [[-14, FLOOR[0], 0], [318, FLOOR[0], 0], [336, FLOOR[1], -1], [28, FLOOR[1], 1], [22, FLOOR[2], -1], [298, FLOOR[2], 2]];
+  SEGS = []; PATH_LEN = 0;
+  for (let i = 1; i < PATH.length; i++) {
+    const a = PATH[i - 1], b = PATH[i], l = dist(a[0], a[1], b[0], b[1]);
+    SEGS.push({ a, b, l, s0: PATH_LEN, room: b[2] }); PATH_LEN += l;
+  }
+  ROOM_S0 = [0, 1, 2].map(r => SEGS.find(g => g.room === r).s0);
 }
+cryptLayout();
 const TRAP_X = [172, 186, 160];
 const POST_X = [[132, 250], [232, 112], [118, 232]];
 const ROOM_DIR = [1, -1, 1];
 // recul minimal : un héros repoussé reste à portée des créatures (bord gauche de l'étage 1 à x≈26)
 // Marge d'entrée : un héros repoussé ne recule pas jusqu'au bord par où arrivent les suivants (le combat reste visible)
 const PUSH_MIN_S = 40, ENTRY_MARGIN = 72, HOLD_LEASH = 36, RANGED_STOP = 70; // tireurs : s'approchent à 70 px pour tirer (combat au milieu de l'écran)
-const ROOM_S0 = [0, 1, 2].map(r => SEGS.find(g => g.room === r).s0);
 function pushBack(h, d) {
   const floor = h.room >= 0 ? ROOM_S0[h.room] + ENTRY_MARGIN + (h.room === 0 ? 14 : 0) : PUSH_MIN_S;
   h.s = Math.max(Math.min(h.s, floor), h.s - d); const p = pathPos(h.s); h.x = p.x; h.y = p.y; h.room = p.room;
@@ -1935,11 +1976,13 @@ function pathPos(s) {
   for (const g of SEGS) if (s <= g.s0 + g.l) { const k = (s - g.s0) / g.l; return { x: lerp(g.a[0], g.b[0], k), y: lerp(g.a[1], g.b[1], k), room: g.room }; }
   const g = SEGS[SEGS.length - 1]; return { x: g.b[0], y: g.b[1], room: g.room };
 }
-const POWER = { x: 40, y: 578, r: 30 };
 
 Scenes.crypt = {
+  tall: true,
+  relayout() { cryptLayout(); this.layH = H; this.bg = null; if (this.btns) this.makeButtons(); },
   enter(arg) {
     arg = arg || {};
+    if (this.layH !== H) { cryptLayout(); this.layH = H; this.bg = null; }
     this.paused = false; this.powerSel = false; this.drag = null; this.press = null; this.speed = this.speed || 1;
     if (arg.resume && this.run && S.run) { this.syncUnits(); }
     else if (arg.resume && S.run) { this.run = S.run; this.setupNight(true); }
@@ -1966,7 +2009,7 @@ Scenes.crypt = {
     this.syncUnits();
     if (this.phase === 'tuto') this.startWave(true);
     if (!resumed && this.run.night === 2 && !S.hints.boss) { S.hints.boss = 1; Toast.show(t('hint_boss')); }
-    if (this.newsFluids) { this.newsFluids = false; Hint.show(t('hint_fluids'), null, null, { boxY: 380 }); setTimeout(() => { if (Hint.cur && Hint.cur.text === t('hint_fluids')) Hint.clear(); }, 7000); }
+    if (this.newsFluids) { this.newsFluids = false; Hint.show(t('hint_fluids'), null, null, { boxBottom: BAR_Y - 6 }); setTimeout(() => { if (Hint.cur && Hint.cur.text === t('hint_fluids')) Hint.clear(); }, 7000); }
 
   },
   syncUnits() {
@@ -1979,14 +2022,14 @@ Scenes.crypt = {
   makeButtons() {
     this.btns = [
       this.bPause = UI.btn({ x: 6, y: 6, w: 40, h: 38, icon: 'pause', style: 'dark', on: () => { this.paused = true; Toast.list = []; Hint.clear(); } }),
-      this.bAtelier = UI.btn({ x: 8, y: 574, w: 140, h: 54, icon: 'altar', label: t('atelier'), style: 'main', on: () => this.toAtelier() }),
-      this.bWave = UI.btn({ x: 156, y: 574, w: 196, h: 54, icon: 'play', label: '', style: 'green', on: () => this.startWave(false) }),
-      this.bSpeed = UI.btn({ x: 300, y: 574, w: 52, h: 50, label: 'x1', style: 'dark', on: () => { this.speed = this.speed === 1 ? 2 : 1; } })
+      this.bAtelier = UI.btn({ x: 8, y: H - 56, w: 140, h: 48, icon: 'altar', label: t('atelier'), style: 'main', on: () => this.toAtelier() }),
+      this.bWave = UI.btn({ x: 156, y: H - 56, w: 196, h: 48, icon: 'play', label: '', style: 'green', on: () => this.startWave(false) }),
+      this.bSpeed = UI.btn({ x: 300, y: H - 56, w: 52, h: 46, label: 'x1', style: 'dark', on: () => { this.speed = this.speed === 1 ? 2 : 1; } })
     ];
     this.pauseBtns = [
-      UI.btn({ x: 90, y: 240, w: 180, h: 52, label: t('resume'), style: 'green', on: () => { this.paused = false; } }),
-      UI.btn({ x: 90, y: 304, w: 180, h: 52, label: t('settings'), style: 'main', on: () => { this.paused = false; go('settings', { back: 'crypt' }); } }),
-      UI.btn({ x: 90, y: 368, w: 180, h: 52, label: t('quit_map'), style: 'red', on: () => { this.paused = false; this.saveRun(); go('map'); } })
+      UI.btn({ x: 90, y: 240 + OY(), w: 180, h: 52, label: t('resume'), style: 'green', on: () => { this.paused = false; } }),
+      UI.btn({ x: 90, y: 304 + OY(), w: 180, h: 52, label: t('settings'), style: 'main', on: () => { this.paused = false; go('settings', { back: 'crypt' }); } }),
+      UI.btn({ x: 90, y: 368 + OY(), w: 180, h: 52, label: t('quit_map'), style: 'red', on: () => { this.paused = false; this.saveRun(); go('map'); } })
     ];
     this.endBtns = [];
   },
@@ -2050,7 +2093,7 @@ Scenes.crypt = {
       move: base.move * rnd(0.92, 1.08), rate: base.rate, range: base.range, cd: 0, atk: 0, stun: 0, slow: 0, slowK: 0, burn: null, poison: null,
       trapHits: 0, disarm: base.disarm || 0, crit: base.crit || 0, heal: base.heal || 0, healAll: !!base.healAll, healCd: 2, darkResist: base.darkResist || 0,
       boneBurn: base.boneBurn || (boss && boss.base === 'mage' ? 1.5 : 0), ignoreLight: !!base.ignoreLight || !!boss, dodge: base.dodge || 0, splash: !!base.splash,
-      size: boss ? 58 : elite ? 48 : 40, hurt: 0, t: rnd(0, 5)
+      size: boss ? 64 : elite ? 54 : 46, hurt: 0, t: rnd(0, 5)
     };
     if (boss) { this.boss = h; Sfx.play('roar'); FX.shake(5, 0.4); }
     if (elite) Toast.show(t('elite_comes'), C.rare);
@@ -2091,7 +2134,8 @@ Scenes.crypt = {
     const c = u.cr;
     if (u.st.fx.soul && !u.usedRevive) { u.usedRevive = true; u.dead = true; u.revive = 1.5; c.dmg = u.st.hp; FX.puff(u.x, FLOOR[u.room] - 30, '#f2f0ff', 10); return; }
     u.dead = true; c.fallen = true; c.dmg = u.st.hp;
-    Sfx.play('bone'); FX.spark(u.x, FLOOR[u.room] - 20, C.bone, 14, 120);
+    Sfx.play('bone'); FX.spark(u.x, FLOOR[u.room] - 20, C.bone, 14, 120); FX.hitStop(0.07); FX.shake(3, 0.15);
+    ['arm0', 'arm1', 'legs', 'back'].forEach(k => { if (c.parts[k]) FX.fling(c.parts[k], u.x, FLOOR[u.room] - 30, 20 * UNIT_K); });
     if (u.st.mut.fire) {
       Sfx.play('boom'); FX.shake(5, 0.3); FX.spark(u.x, FLOOR[u.room] - 30, '#ff8a2a', 30, 180);
       this.heroes.forEach(h => { if (h.room === u.room && Math.abs(h.x - u.x) < 70) this.hitHero(h, 30 + u.st.str, null); });
@@ -2102,12 +2146,16 @@ Scenes.crypt = {
     if (h.dodge && Math.random() < h.dodge) { FX.text(h.x, h.y - h.size - 8, t('dodge'), C.dim, 11); return; }
     h.hp -= d; h.hurt = 0.15;
     FX.text(h.x + rnd(-6, 6), h.y - h.size - 6, '-' + Math.round(d), kind === 'crit' ? C.gold : '#fff', kind === 'crit' ? 15 : 12);
+    if (kind === 'crit' || d >= h.maxHp * 0.3) FX.hitStop(0.05);
     if (h.hp <= 0) this.heroDies(h);
   },
   heroDies(h) {
     h.dead = true; this.run.kills++; S.best.heroes[h.type] = (S.best.heroes[h.type] || 0) + 1;
     this.gauge = Math.min(100, this.gauge + (h.boss ? D.soulGaugeBoss : D.soulGaugeKill));
     Sfx.play('die'); FX.puff(h.x, h.y - 16, '#cfc6dd', 8);
+    if (h.boss || h.elite) { FX.hitStop(h.boss ? 0.18 : 0.08); FX.shake(h.boss ? 8 : 4, 0.25); }
+    // l'âme du héros file vers la jauge du Rappel d'os
+    for (let i = 0; i < (h.boss ? 5 : h.elite ? 2 : 1); i++) FX.wisp(h.x, h.y - h.size * 0.6, POWER.x, POWER.y, () => { this.gaugePulse = 0.3; });
     // butin
     const out = [];
     const tutoDrop = this.phase === 'tuto';
@@ -2313,7 +2361,7 @@ Scenes.crypt = {
     this.lost.forEach(p => { if (S.inv.indexOf(p) < 0) Logic.invAdd(p); }); this.lost = [];
     this.units.forEach(u => { if (u.dead) { u.cr.fallen = true; this.run.destroyed = true; } });
     this.run.wave++;
-    if (S.tuto === 8) { S.tuto = 99; Hint.show(t('tuto_done'), null, null, { boxY: 420 }); setTimeout(() => { if (Hint.cur && Hint.cur.text === t('tuto_done')) Hint.clear(); }, 6000); }
+    if (S.tuto === 8) { S.tuto = 99; Hint.show(t('tuto_done'), null, null, { boxBottom: H - 8 }); setTimeout(() => { if (Hint.cur && Hint.cur.text === t('tuto_done')) Hint.clear(); }, 6000); }
     if (this.run.wave >= this.run.waves) this.win();
     else {
       this.phase = 'prep'; S.run = this.run;
@@ -2334,7 +2382,7 @@ Scenes.crypt = {
     S.run = null; this.phase = 'result'; this.result = { stars, souls, first, n };
     Sfx.play('win');
     const bw = 150;
-    this.endBtns = [UI.btn({ x: W / 2 - bw / 2, y: 430, w: bw, h: 52, label: n === 10 && !S.titan ? t('build_titan') : t('continue'), style: 'green', on: () => {
+    this.endBtns = [UI.btn({ x: W / 2 - bw / 2, y: 430 + OY(), w: bw, h: 52, label: n === 10 && !S.titan ? t('build_titan') : t('continue'), style: 'green', on: () => {
       if (n === 10 && !S.titan) go('atelier', { titan: true }); else go('map');
     } })];
     Save.save();
@@ -2349,8 +2397,8 @@ Scenes.crypt = {
     this.lost.forEach(p => { if (S.inv.indexOf(p) < 0) Logic.invAdd(p); }); this.lost = [];
     S.run = null;
     this.endBtns = [
-      UI.btn({ x: 40, y: 430, w: 136, h: 52, label: t('retry'), style: 'green', on: () => go('crypt', { night: this.run.night, endless }) }),
-      UI.btn({ x: 184, y: 430, w: 136, h: 52, label: t('map'), style: 'main', on: () => go('map') })
+      UI.btn({ x: 40, y: 430 + OY(), w: 136, h: 52, label: t('retry'), style: 'green', on: () => go('crypt', { night: this.run.night, endless }) }),
+      UI.btn({ x: 184, y: 430 + OY(), w: 136, h: 52, label: t('map'), style: 'main', on: () => go('map') })
     ];
     Save.save();
   },
@@ -2360,7 +2408,7 @@ Scenes.crypt = {
     for (let r = 0; r < 3; r++) for (let i = 0; i < 2; i++) if (dist(p.x, p.y, POST_X[r][i], FLOOR[r] - 30) < 36) return [r, i];
     return null;
   },
-  cardAt(p) { if (p.y < 506 || p.y > 556) return null; const i = Math.floor((p.x - 8) / 50); return S.creatures[i] || null; },
+  cardAt(p) { if (p.y < BAR_Y + 4 || p.y > BAR_Y + 50) return null; const i = Math.floor((p.x - 8) / 50); return S.creatures[i] || null; },
   down(p) {
     if (this.paused) { UI.down(this.pauseBtns, p); return; }
     if (this.phase === 'result' || this.phase === 'lost') { UI.down(this.endBtns, p); return; }
@@ -2409,7 +2457,7 @@ Scenes.crypt = {
         const other = S.creatures.find(o => o !== c && o.pos && o.pos[0] === post[0] && o.pos[1] === post[1]);
         if (other) other.pos = c.pos;
         c.pos = post; Sfx.play('bone');
-      } else if (p.y < 500) { c.pos = null; Sfx.play('tap'); }
+      } else if (p.y < BAR_Y) { c.pos = null; Sfx.play('tap'); }
       this.syncUnits(); Save.save(); return;
     }
     this.press = null;
@@ -2424,12 +2472,12 @@ Scenes.crypt = {
     if (S.tuto >= 99) return;
     Hint.clear();
     if (S.tuto === 0 && this.phase === 'tuto') {
-      if (this.heroes.some(h => !h.dead && h.x > TRAP_X[0] - 24)) Hint.show(t('tuto_trap'), TRAP_X[0], FLOOR[0] - 20, { boxY: 230 });
-      else Hint.show(t('tuto_intro'), null, null, { boxY: 230 });
-    } else if (S.tuto === 1 && this.drops[0]) Hint.show(t('tuto_pick'), this.drops[0].x, this.drops[0].y - 8, { boxY: 230 });
-    else if (S.tuto === 2) Hint.show(t('tuto_atelier'), 78, 600, { boxY: 380 });
-    else if (S.tuto === 7 && this.phase === 'prep') Hint.show(t('tuto_wave'), 254, 600, { boxY: 380 });
-    else if (S.tuto === 8 && this.phase === 'wave') Hint.show(t('tuto_traps'), null, null, { boxY: 360 });
+      if (this.heroes.some(h => !h.dead && h.x > TRAP_X[0] - 24)) Hint.show(t('tuto_trap'), TRAP_X[0], FLOOR[0] - 20, { boxBottom: H - 8 });
+      else Hint.show(t('tuto_intro'), null, null, { boxBottom: H - 8 });
+    } else if (S.tuto === 1 && this.drops[0]) Hint.show(t('tuto_pick'), this.drops[0].x, this.drops[0].y - 8, { boxBottom: H - 8 });
+    else if (S.tuto === 2) Hint.show(t('tuto_atelier'), 78, H - 32, { boxBottom: BAR_Y - 6 });
+    else if (S.tuto === 7 && this.phase === 'prep') Hint.show(t('tuto_wave'), 254, H - 32, { boxBottom: BAR_Y - 6 });
+    else if (S.tuto === 8 && this.phase === 'wave') Hint.show(t('tuto_traps'), null, null, { boxBottom: H - 8 });
   },
 
   // ---- Dessin ----
@@ -2461,6 +2509,7 @@ Scenes.crypt = {
     return oc;
   },
   draw() {
+    if (!this.bg) this.bg = this.renderBg();
     ctx.drawImage(this.bg, 0, 0, W, H);
     const bgi = Art.img('bg_crypt');
     if (bgi) ROOM_TOP.forEach((y, r) => {
@@ -2565,30 +2614,31 @@ Scenes.crypt = {
     const c = u.cr, fy = FLOOR[u.room];
     if (u.dead) {
       ctx.globalAlpha = 0.8;
-      if (c.parts.torso) Art.piece(c.parts.torso, u.x, fy - 6, 22, { rot: Math.PI / 2, noGlow: true });
-      if (c.parts.head) Art.piece(c.parts.head, u.x + 12, fy - 6, 14, { noGlow: true, eye: '#333' });
+      if (c.parts.torso) Art.piece(c.parts.torso, u.x, fy - 6, 26, { rot: Math.PI / 2, noGlow: true });
+      if (c.parts.head) Art.piece(c.parts.head, u.x + 14, fy - 6, 16, { noGlow: true, eye: '#333' });
       ctx.globalAlpha = 1;
       if (u.revive > 0) Art.glowAt(u.x, fy - 20, 30, 'rgba(242,240,255,0.5)');
       return;
     }
-    const size = 24, foot = Art.creatureFoot(c.parts);
+    const size = 28 * UNIT_K, foot = Art.creatureFoot(c.parts);
     const co = { t: time, seed: u.seed, flip: !u.flip, atk: u.atk > 0 ? 1 - u.atk : 0, ghost: u.st.mut.soul, noGlow: true }, cy = fy - foot * size - 1;
     Art.creature(c.parts, u.x, cy, size, co);
     if (u.hurt > 0) Art.tinted(u.x, fy + 4, size * 4, size * 4, 'rgba(255,50,50,0.55)', () => Art.creature(c.parts, 0, cy - fy - 4, size, co));
     if (u.stun > 0) txt('✦', u.x, fy - foot * size - size * 1.3, 12, C.gold);
     const hp = Math.max(0, u.st.hp - c.dmg), k = hp / u.st.hp;
-    if (k < 1) { const y = fy - foot * size - size * 1.25; ctx.fillStyle = '#300'; ctx.fillRect(u.x - 14, y, 28, 4); ctx.fillStyle = k > 0.5 ? C.toxic : k > 0.25 ? '#e0b030' : C.red; ctx.fillRect(u.x - 14, y, 28 * k, 4); }
+    if (k < 1) { const y = fy - foot * size - size * 1.25; ctx.fillStyle = '#300'; ctx.fillRect(u.x - 16, y, 32, 4); ctx.fillStyle = k > 0.5 ? C.toxic : k > 0.25 ? '#e0b030' : C.red; ctx.fillRect(u.x - 16, y, 32 * k, 4); }
   },
   drawHero(h) {
+    const hs = h.size * UNIT_K;
     if (h.dead) { ctx.globalAlpha = Math.max(0, (h.deadT || 0) * 2); }
     const dir = ROOM_DIR[h.room] || (h.room === -1 ? 1 : 1);
-    Art.hero(h.type, h.x, h.y, h.size, { t: h.t, walk: !h.stun && !h.atk, flip: dir < 0, atk: h.atk > 0 ? 1 - h.atk : 0, hurt: h.hurt > 0 });
+    Art.hero(h.type, h.x, h.y, hs, { t: h.t, walk: !h.stun && !h.atk, flip: dir < 0, atk: h.atk > 0 ? 1 - h.atk : 0, hurt: h.hurt > 0 });
     ctx.globalAlpha = 1;
     if (h.dead) return;
-    if (h.elite && !h.boss) Art.glowAt(h.x, h.y - h.size * 0.5, h.size * 0.7, 'rgba(74,168,255,0.25)');
-    if (h.stun > 0) txt('✦', h.x, h.y - h.size - 10, 12, C.gold);
-    if (h.burn || h.poison) ctx.fillStyle = h.burn ? '#ff8a2a' : C.toxic, ctx.beginPath(), ctx.arc(h.x + 8, h.y - h.size - 4, 3, 0, 7), ctx.fill();
-    if (h.hp < h.maxHp && !h.boss) { const k = h.hp / h.maxHp; ctx.fillStyle = '#300'; ctx.fillRect(h.x - 12, h.y - h.size - 8, 24, 3); ctx.fillStyle = '#ff5050'; ctx.fillRect(h.x - 12, h.y - h.size - 8, 24 * k, 3); }
+    if (h.elite && !h.boss) Art.glowAt(h.x, h.y - hs * 0.5, hs * 0.7, 'rgba(74,168,255,0.25)');
+    if (h.stun > 0) txt('✦', h.x, h.y - hs - 10, 12, C.gold);
+    if (h.burn || h.poison) ctx.fillStyle = h.burn ? '#ff8a2a' : C.toxic, ctx.beginPath(), ctx.arc(h.x + 8, h.y - hs - 4, 3, 0, 7), ctx.fill();
+    if (h.hp < h.maxHp && !h.boss) { const k = h.hp / h.maxHp; ctx.fillStyle = '#300'; ctx.fillRect(h.x - 12, h.y - hs - 8, 24, 3); ctx.fillStyle = '#ff5050'; ctx.fillRect(h.x - 12, h.y - hs - 8, 24 * k, 3); }
   },
   drawHud() {
     topBar(52);
@@ -2608,7 +2658,7 @@ Scenes.crypt = {
     }
   },
   drawBottom() {
-    const y = 500;
+    const y = BAR_Y, cy0 = y + 6;
     ctx.fillStyle = '#160d20'; ctx.fillRect(0, y, W, H - y); ctx.fillStyle = C.ink; ctx.fillRect(0, y, W, 3);
     this.bAtelier.show = this.phase === 'prep'; this.bWave.show = this.phase === 'prep'; this.bSpeed.show = this.phase === 'wave';
     this.bWave.label = this.run.endless ? t('wave_n', { n: this.run.wave + 1 }) : t('launch_wave', { n: this.run.wave + 1, m: this.run.waves });
@@ -2619,32 +2669,33 @@ Scenes.crypt = {
     if (this.phase === 'prep' || this.phase === 'tuto') {
       S.creatures.forEach((c, i) => {
         const x = 8 + i * 50, out = !c.pos;
-        panel(x, 506, 46, 46, out ? '#2a2030' : C.panel, 8);
-        ctx.save(); rr(x, 506, 46, 46, 8); ctx.clip();
-        Art.creature(c.parts, x + 23, 526, 15, { still: true, noGlow: true, alpha: c.fallen ? 0.4 : out ? 0.6 : 1 }); ctx.restore();
-        if (c.pos) txt(['I', 'II', 'III'][c.pos[0]], x + 38, 515, 9, C.dim);
-        else txt(t('reserve'), x + 23, 545, 8, C.dim);
+        panel(x, cy0, 46, 44, out ? '#2a2030' : C.panel, 8);
+        ctx.save(); rr(x, cy0, 46, 44, 8); ctx.clip();
+        Art.creature(c.parts, x + 23, cy0 + 19, 15, { still: true, noGlow: true, alpha: c.fallen ? 0.4 : out ? 0.6 : 1 }); ctx.restore();
+        if (c.pos) txt(['I', 'II', 'III'][c.pos[0]], x + 38, cy0 + 8, 9, C.dim);
+        else txt(t('reserve'), x + 23, cy0 + 33, 8, C.dim);
         const st = Logic.stats(c.parts), hp = Math.max(0, st.hp - (c.dmg || 0));
         ctx.fillStyle = '#300'; ctx.fillRect(x + 5, y + 46, 36, 3); ctx.fillStyle = c.fallen ? '#555' : C.toxic; ctx.fillRect(x + 5, y + 46, 36 * hp / st.hp, 3);
       });
-      if (!S.creatures.length) txt(t('no_creature'), W / 2, 530, 12, C.dim);
-      else if (this.phase === 'prep' && S.tuto >= 99) txt(t('drag_hint'), 352, 560, 9, C.dim, 'right', { stroke: false });
+      if (!S.creatures.length) txt(t('no_creature'), W / 2, cy0 + 22, 12, C.dim);
+      else if (this.phase === 'prep' && S.tuto >= 99 && S.creatures.length <= 4) txt(t('drag_hint'), 352, cy0 + 24, 9, C.dim, 'right', { stroke: false });
     } else {
       // pouvoir du nécromancien
       const k = this.gauge / 100, full = k >= 1;
+      if (this.gaugePulse > 0) { this.gaugePulse -= 1 / 60; Art.glowAt(POWER.x, POWER.y, 40 + this.gaugePulse * 60, 'rgba(125,255,74,' + this.gaugePulse * 2 + ')'); }
       if (full) Art.glowAt(POWER.x, POWER.y, 46 + Math.sin(time * 6) * 4, 'rgba(125,255,74,0.5)');
       ctx.beginPath(); ctx.arc(POWER.x, POWER.y, POWER.r, 0, 7); ctx.fillStyle = this.powerSel ? C.violetL : C.panel; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
       ctx.lineWidth = 6; ctx.strokeStyle = full ? C.toxic : C.violetL; ctx.beginPath(); ctx.arc(POWER.x, POWER.y, POWER.r - 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
       Art.icon('skull', POWER.x, POWER.y, 30);
-      txt(t('rally'), POWER.x, POWER.y + 44, 10, full ? C.toxic : C.dim);
+      txt(t('rally'), POWER.x, POWER.y + 40, 10, full ? C.toxic : C.dim);
       // état des créatures
       this.units.forEach((u, i) => {
-        const x = 84 + (i % 3) * 70, yy = 512 + Math.floor(i / 3) * 56;
-        panel(x, yy, 64, 50, u.dead ? '#2a1a1a' : C.panel, 8);
-        ctx.save(); rr(x, yy, 64, 50, 8); ctx.clip(); Art.creature(u.cr.parts, x + 20, yy + 22, 13, { still: true, noGlow: true, alpha: u.dead ? 0.35 : 1 }); ctx.restore();
+        const x = 84 + (i % 3) * 70, yy = cy0 + Math.floor(i / 3) * 52;
+        panel(x, yy, 64, 48, u.dead ? '#2a1a1a' : C.panel, 8);
+        ctx.save(); rr(x, yy, 64, 48, 8); ctx.clip(); Art.creature(u.cr.parts, x + 20, yy + 22, 13, { still: true, noGlow: true, alpha: u.dead ? 0.35 : 1 }); ctx.restore();
         const hp = Math.max(0, u.st.hp - u.cr.dmg);
         txt(u.dead ? '✝' : String(Math.round(hp)), x + 48, yy + 18, 12, u.dead ? '#ff7a7a' : C.text);
-        ctx.fillStyle = '#300'; ctx.fillRect(x + 6, yy + 42, 52, 4); ctx.fillStyle = C.toxic; ctx.fillRect(x + 6, yy + 42, 52 * hp / u.st.hp, 4);
+        ctx.fillStyle = '#300'; ctx.fillRect(x + 6, yy + 40, 52, 4); ctx.fillStyle = C.toxic; ctx.fillRect(x + 6, yy + 40, 52 * hp / u.st.hp, 4);
       });
     }
     UI.draw(this.btns.filter(b => b !== this.bPause));
@@ -2653,11 +2704,12 @@ Scenes.crypt = {
   calm() { return this.paused || this.phase === 'lost' || this.phase === 'result'; },
   drawPause() {
     ctx.fillStyle = 'rgba(10,5,16,0.8)'; ctx.fillRect(0, 0, W, H);
-    txt(t('pause'), W / 2, 200, 28, C.text);
+    txt(t('pause'), W / 2, 200 + OY(), 28, C.text);
     UI.draw(this.pauseBtns);
   },
   drawEnd() {
     ctx.fillStyle = 'rgba(10,5,16,0.82)'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.translate(0, OY()); // panneau centré sur les écrans allongés (les boutons sont déjà décalés)
     panel(30, 150, 300, 350, C.panel, 16);
     if (this.phase === 'lost') {
       Art.icon('skull', W / 2, 220, 70);
@@ -2673,6 +2725,7 @@ Scenes.crypt = {
       Art.icon('soul', W / 2 - 40, 370, 26); txt('+' + r.souls, W / 2 - 22, 371, 20, C.toxic, 'left');
       txt(killsTxt(this.run.kills), W / 2, 402, 12, C.dim);
     }
+    ctx.restore();
     UI.draw(this.endBtns);
   }
 };
@@ -2823,7 +2876,7 @@ function drawTitle(cx, y) {
 function killsTxt(n) { return t(n === 0 ? 'kills_0' : n === 1 ? 'kills_1' : 'kills_n', { n }); }
 // Lancement de la partie depuis l'écran titre : tutoriel, nuit en cours ou carte
 function startGame() {
-  if (S.tuto === 0 && S.cleared === 0) { go('crypt', { night: 1 }); return; }
+  if (S.tuto === 0 && S.cleared === 0) { go(!S.introSeen && Art.img('bg_intro1') ? 'intro' : 'crypt', { night: 1 }); return; }
   if (S.tuto > 0 && S.tuto < 99) {
     if (S.tuto >= 3 && S.tuto <= 6) { go('atelier', { from: 'crypt' }); return; }
     go('crypt', S.run ? { resume: true } : { night: 1 }); return;
@@ -2833,6 +2886,19 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.1', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['La crypte occupe tout l\'écran des téléphones allongés : étages plus hauts, créatures et héros plus grands.',
+      'Les dégâts répétés se cumulent en un seul chiffre lisible.',
+      'Coups plus percutants : arrêt sur image, membres qui volent, âmes qui filent vers le Rappel d\'os.',
+      'Le broyeur s\'anime : les pièces y tombent et les âmes rejoignent ton compteur.',
+      'Vraie fin : ton propre Titan enfonce les portes de la cathédrale, suivie du générique.',
+      'Nouvelle police, silhouettes fantômes sur la table de l\'atelier, aides du tutoriel en bas de l\'écran.'],
+    en: ['The crypt fills the whole screen on tall phones: taller floors, bigger creatures and heroes.',
+      'Repeated damage now adds up into a single readable number.',
+      'Punchier hits: hit-stop, flying limbs, souls streaking into the Bone Rally.',
+      'The grinder comes alive: pieces drop in and souls fly to your counter.',
+      'A real ending: your own Titan smashes the cathedral doors, followed by the credits.',
+      'New font, ghost outlines on the workshop table, tutorial tips at the bottom of the screen.'] },
   { v: '1.0', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['Première version : dix nuits pour défendre la crypte jusqu\'à la cathédrale, et le Titan d\'Os à coudre.',
       'Assemble tes créatures à l\'atelier avec les restes des héros, couds les jointures et broie les pièces en trop.',
@@ -3146,6 +3212,7 @@ Scenes.bestiary = {
 };
 
 // ============================== Scène : Broyeur (broyage en masse) ==============================
+const GR_MILL = { y: 590 };
 Scenes.grinder = {
   enter(arg) {
     this.from = (arg && arg.from) || 'map';
@@ -3156,8 +3223,21 @@ Scenes.grinder = {
     this.bNone = UI.btn({ x: 212, y: 538, w: 140, h: 38, label: t('gr_none'), size: 12, style: 'dark', on: () => { this.sel.clear(); this.confirm = -1e9; } });
     this.bGo = UI.btn({ x: 8, y: 584, w: 344, h: 50, label: '', size: 15, style: 'red', on: () => this.grindSel() });
     this.btns = [this.back, this.bAll, this.bDup, this.bNone, this.bGo];
+    this.anim = null;
   },
-  update() {},
+  // mise en scène du broyage : les pièces volent dans le broyeur, il broie, les âmes filent vers le compteur
+  update(dt) {
+    const a = this.anim; if (!a) return;
+    a.t += dt;
+    if (!a.crunched && a.t > a.end) {
+      a.crunched = true; Sfx.play('grind'); FX.shake(5, 0.35);
+      FX.spark(W / 2, GR_MILL.y - 10, C.bone, 26, 170); FX.puff(W / 2, GR_MILL.y - 16, 'rgba(200,190,170,0.6)', 8);
+      const n = Math.min(10, a.g), share = a.g / n;
+      for (let i = 0; i < n; i++) setTimeout(() => FX.wisp(W / 2 + rnd(-14, 14), GR_MILL.y - 20, 312, 25, () => { a.pend = Math.max(0, a.pend - share); Sfx.play('tap'); }), i * 70);
+      FX.text(W / 2, GR_MILL.y - 60, '+' + a.g, C.toxic, 22);
+    }
+    if (a.crunched && a.pend <= 0.01 && a.t > a.end + 0.6) this.anim = null;
+  },
   list() { return Logic.invSorted(this.slot).filter(p => this.rar[p.r]); },
   chosen() { return S.inv.filter(p => this.sel.has(p.id)); },
   // doublons : pour chaque type de pièce, garde le meilleur exemplaire (rareté, puis fluide) et sélectionne les autres
@@ -3174,9 +3254,12 @@ Scenes.grinder = {
   grindSel() {
     const ch = this.chosen(); if (!ch.length) return;
     if (ch.some(p => p.r >= 1) && time - this.confirm > 3) { this.confirm = time; Toast.show(t('gr_confirm'), C.legend); return; }
+    const G = this.GRID, list = this.list();
+    const items = ch.map((p, i) => { const j = list.indexOf(p); return { p, x: G.x + (j % G.cols) * G.cell + G.cell / 2, y: clamp(G.y + Math.floor(j / G.cols) * G.cell - this.scroll + G.cell / 2, G.y + 10, G.y + G.h - 10), d: Math.min(i * 0.05, 0.7), spin: rnd(-8, 8) }; });
     let g = 0; ch.forEach(p => { g += D.grindSouls[p.r]; Logic.invRemove(p); });
     S.souls += g; this.sel.clear(); this.confirm = -1e9;
-    Sfx.play('grind'); FX.spark(W / 2, 600, C.bone, 30, 160); FX.text(W / 2, 560, '+' + g, C.toxic, 22);
+    this.anim = { items, t: 0, g, pend: g, end: Math.max(...items.map(it => it.d)) + 0.45, crunched: false };
+    Sfx.play('tap');
     this.scroll = clamp(this.scroll, 0, this.maxScroll());
     Save.save();
   },
@@ -3204,7 +3287,8 @@ Scenes.grinder = {
     // en-tête et filtres
     ctx.fillStyle = 'rgba(13,7,22,0.94)'; ctx.fillRect(0, 0, W, G.y - 2);
     txt(t('grinder'), 180, 25, 19, C.text);
-    Art.icon('soul', 312, 25, 22); txt(String(S.souls), 326, 26, 14, C.toxic, 'left');
+    const pend = this.anim ? Math.round(this.anim.pend) : 0;
+    Art.icon('soul', 312, 25, 22); txt(String(S.souls - pend), 326, 26, 14, C.toxic, 'left');
     const tw = (W - 16) / TABS.length;
     TABS.forEach((tb, i) => {
       const on = this.slot === tb; rr(8 + i * tw + 1, 52, tw - 2, 32, 8); ctx.fillStyle = on ? C.violet : C.panel; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
@@ -3221,8 +3305,22 @@ Scenes.grinder = {
     this.bGo.off = !ch.length;
     this.bGo.label = ch.length ? (time - this.confirm < 3 ? t('sure') : t('gr_go', { n: ch.length, g })) : t('gr_pick');
     UI.draw(this.btns);
+    const a = this.anim;
+    if (a) {
+      // le broyeur surgit par-dessus la barre d'actions
+      const pop = ease(clamp(a.t / 0.25, 0, 1)), sh = a.crunched && a.t < a.end + 0.4 ? rnd(-3, 3) : 0;
+      ctx.fillStyle = 'rgba(13,7,22,' + 0.96 * pop + ')'; ctx.fillRect(0, G.y + G.h + 2, W, H - G.y - G.h);
+      Art.glowAt(W / 2, GR_MILL.y, 70 * pop, a.crunched ? 'rgba(125,255,74,0.45)' : 'rgba(195,58,74,0.35)');
+      Art.icon('bin', W / 2 + sh, GR_MILL.y + sh, 84 * pop);
+      a.items.forEach(it => {
+        const k = clamp((a.t - it.d) / 0.45, 0, 1); if (k >= 1) return;
+        const e = k * k, x = lerp(it.x, W / 2, e), y = lerp(it.y, GR_MILL.y - 18, e) - Math.sin(k * Math.PI) * 50;
+        Art.piece(it.p, x, y, 40 * (1 - 0.6 * e), { noGlow: true, rot: it.spin * k });
+      });
+    }
   },
   down(p) {
+    if (this.anim) return;
     if (UI.down(this.btns, p)) return;
     if (p.y >= 52 && p.y < 84) { const i = clamp(Math.floor((p.x - 8) / ((W - 16) / TABS.length)), 0, TABS.length - 1); this.slot = TABS[i]; this.scroll = 0; Sfx.play('tap'); return; }
     if (p.y >= 90 && p.y < 124) { const r = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.rar[r] = !this.rar[r]; this.scroll = 0; Sfx.play('tap'); return; }
@@ -3300,42 +3398,141 @@ Scenes.settings = {
 };
 
 // ============================== Scène : Fin (le Titan d'Os) ==============================
+// ---- Introduction illustrée (3 cases, affichée une fois, si les images sont présentes) ----
+Scenes.intro = {
+  tall: true,
+  enter() { this.i = 0; this.t = 0; this.out = false; this.skip = UI.btn({ x: W - 98, y: 10, w: 88, h: 34, label: t('skip'), size: 12, style: 'dark', on: () => this.done() }); Sfx.Music.set('crypt'); },
+  done() { if (this.out) return; this.out = true; S.introSeen = 1; Save.save(); go('crypt', { night: 1 }); },
+  update(dt) { this.t += dt; },
+  draw() {
+    ctx.fillStyle = '#07040b'; ctx.fillRect(0, 0, W, H);
+    const im = Art.img('bg_intro' + (this.i + 1)), a = clamp(this.t / 0.6, 0, 1);
+    if (im) {
+      const z = 1.04 + Math.min(this.t, 8) * 0.008, k = Math.max(W / im.naturalWidth, H / im.naturalHeight) * z, w = im.naturalWidth * k, h = im.naturalHeight * k;
+      ctx.globalAlpha = a; ctx.drawImage(im, (W - w) / 2 + (this.i % 2 ? -1 : 1) * Math.min(this.t, 8) * 1.2, (H - h) / 2, w, h); ctx.globalAlpha = 1;
+    }
+    const g = ctx.createLinearGradient(0, H - 230, 0, H); g.addColorStop(0, 'rgba(7,4,11,0)'); g.addColorStop(0.45, 'rgba(7,4,11,0.85)'); g.addColorStop(1, 'rgba(7,4,11,0.95)');
+    ctx.fillStyle = g; ctx.fillRect(0, H - 230, W, 230);
+    ctx.globalAlpha = clamp((this.t - 0.4) / 0.6, 0, 1);
+    txtWrap(t('intro_' + (this.i + 1)), W / 2, H - 120, 310, 17, C.text);
+    ctx.globalAlpha = 1;
+    for (let j = 0; j < 3; j++) { ctx.fillStyle = j === this.i ? C.toxic : 'rgba(236,224,195,0.35)'; ctx.beginPath(); ctx.arc(W / 2 - 16 + j * 16, H - 30, 4, 0, 7); ctx.fill(); }
+    if (this.t > 1.2) { ctx.globalAlpha = 0.5 + 0.3 * Math.sin(time * 4); txt(t('tap_continue'), W / 2, H - 52, 11, C.dim); ctx.globalAlpha = 1; }
+    UI.drawBtn(this.skip);
+  },
+  down(p) { if (UI.down([this.skip], p)) return; },
+  up(p) {
+    if (UI.up([this.skip], p)) return;
+    if (this.t < 0.5) return;
+    if (this.i < 2) { this.i++; this.t = 0; Sfx.play('tap'); } else this.done();
+  }
+};
+
+// ---- Fin : le Titan du joueur enfonce les portes, puis générique ----
+const END_DOOR = { x: 230, y: 452 }; // bas des portes (image cathédrale : portes centrées, sol à ~70 % de la hauteur)
 Scenes.ending = {
-  enter() { this.t = 0; this.broke = false; this.btn = UI.btn({ x: 80, y: 560, w: 200, h: 50, label: t('free_mode'), style: 'green', on: () => go('map'), show: false }); Sfx.Music.set('titan'); FX.clear(); },
+  enter() {
+    this.t = 0; this.broke = false; this.lastStep = -1;
+    this.btn = UI.btn({ x: 80, y: 586, w: 200, h: 46, label: t('free_mode'), style: 'green', on: () => go('map'), show: false });
+    Sfx.Music.set('titan'); FX.clear();
+  },
+  titanX() {
+    const walk = clamp(this.t / 5, 0, 1);
+    return lerp(-90, 128, walk) + (this.t > 5 && this.t < 5.6 ? Math.sin((this.t - 5) / 0.6 * Math.PI) * 26 : 0);
+  },
   update(dt) {
     this.t += dt;
     const step = Math.floor(this.t / 0.8);
-    if (this.t < 5 && step !== this.lastStep) { this.lastStep = step; FX.shake(3, 0.15); Sfx.play('hit'); }
-    if (this.t > 5.6 && !this.broke) { this.broke = true; FX.shake(14, 1); FX.flash = 1; Sfx.play('boom'); for (let i = 0; i < 30; i++) FX.spark(300, 380, pick(['#8a6a3a', '#ffe9a0', C.stone]), 2, 260, 1.2); }
-    if (this.t > 9) this.btn.show = true;
+    if (this.t < 5 && step !== this.lastStep) { this.lastStep = step; FX.shake(2 + step * 0.6, 0.15); Sfx.play('hit'); FX.puff(this.titanX() + 20, 456, 'rgba(120,100,140,0.5)', 5); }
+    if (this.t > 5.4 && !this.broke) {
+      this.broke = true; FX.shake(14, 1); FX.flash = 1; Sfx.play('boom');
+      for (let i = 0; i < 40; i++) FX.spark(END_DOOR.x, END_DOOR.y - 60, pick(['#8a6a3a', '#ffe9a0', '#5a4030']), 2, 300, 1.4);
+    }
+    if (this.t > 13 && !this.btn.show) this.btn.show = true;
+  },
+  drawCathedral() {
+    const img = Art.img('bg_cathedral');
+    if (img) {
+      const k = Math.max(W / img.naturalWidth, H / img.naturalHeight), w = img.naturalWidth * k, h = img.naturalHeight * k;
+      ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h); return;
+    }
+    const g = ctx.createLinearGradient(0, 0, 0, END_DOOR.y); g.addColorStop(0, '#0c0618'); g.addColorStop(1, '#2e1a44'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 46; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.25 + 0.3 * Math.sin(time * 2 + i)) + ')'; ctx.fillRect((i * 97) % W, (i * 53) % 260, 2, 2); }
+    // lune
+    Art.glowAt(46, 170, 60, 'rgba(220,230,255,0.22)'); ctx.fillStyle = '#e8ecff'; ctx.beginPath(); ctx.arc(46, 170, 18, 0, 7); ctx.fill();
+    const cx = END_DOOR.x, base = END_DOOR.y, stone = '#3a3352', dark = '#241f36';
+    ctx.lineWidth = 3; ctx.strokeStyle = C.ink;
+    // tours et flèches
+    [[cx - 92, 70], [cx + 92, 70]].forEach(([x, top]) => {
+      ctx.fillStyle = dark; ctx.fillRect(x - 26, top + 90, 52, base - top - 90); ctx.strokeRect(x - 26, top + 90, 52, base - top - 90);
+      ctx.beginPath(); ctx.moveTo(x - 30, top + 92); ctx.lineTo(x, top); ctx.lineTo(x + 30, top + 92); ctx.closePath(); ctx.fill(); ctx.stroke();
+      for (let k = 0; k < 2; k++) { const wy = top + 120 + k * 90; ctx.fillStyle = '#ffcf6a'; ctx.beginPath(); ctx.moveTo(x - 7, wy + 34); ctx.lineTo(x - 7, wy + 8); ctx.arc(x, wy + 8, 7, Math.PI, 0); ctx.lineTo(x + 7, wy + 34); ctx.fill(); }
+    });
+    // nef et pignon
+    ctx.fillStyle = stone; ctx.beginPath(); ctx.moveTo(cx - 66, base); ctx.lineTo(cx - 66, 230); ctx.lineTo(cx, 150); ctx.lineTo(cx + 66, 230); ctx.lineTo(cx + 66, base); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // rosace
+    Art.glowAt(cx, 250, 50, 'rgba(255,200,110,0.35)');
+    ctx.fillStyle = '#ffcf6a'; ctx.beginPath(); ctx.arc(cx, 250, 26, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#7a4a20'; ctx.lineWidth = 2; for (let a = 0; a < 8; a++) { ctx.beginPath(); ctx.moveTo(cx, 250); ctx.lineTo(cx + Math.cos(a * Math.PI / 4) * 26, 250 + Math.sin(a * Math.PI / 4) * 26); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(cx, 250, 9, 0, 7); ctx.stroke(); ctx.strokeStyle = C.ink; ctx.lineWidth = 3;
+    // portail en ogive
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.moveTo(cx - 42, base); ctx.lineTo(cx - 42, base - 100); ctx.quadraticCurveTo(cx - 42, base - 150, cx, base - 168); ctx.quadraticCurveTo(cx + 42, base - 150, cx + 42, base - 100); ctx.lineTo(cx + 42, base); ctx.fill(); ctx.stroke();
+    // sol
+    ctx.fillStyle = '#0d0716'; ctx.fillRect(0, base, W, H - base); ctx.fillStyle = '#1d1430'; ctx.fillRect(0, base, W, 4);
+  },
+  drawDoor() {
+    const cx = END_DOOR.x, base = END_DOOR.y, a = clamp((this.t - 5.4) / 0.6, 0, 1);
+    const arch = () => { ctx.beginPath(); ctx.moveTo(cx - 32, base); ctx.lineTo(cx - 32, base - 92); ctx.quadraticCurveTo(cx - 32, base - 132, cx, base - 148); ctx.quadraticCurveTo(cx + 32, base - 132, cx + 32, base - 92); ctx.lineTo(cx + 32, base); ctx.closePath(); };
+    if (!this.broke) {
+      // la porte tremble sous les coups
+      const sh = this.t > 4.5 ? Math.sin(this.t * 60) * 1.2 : 0;
+      ctx.save(); ctx.translate(sh, 0); arch(); ctx.fillStyle = '#6a4626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+      ctx.strokeStyle = '#3a2412'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, base); ctx.lineTo(cx, base - 148); ctx.stroke();
+      for (let k = 0; k < 3; k++) { ctx.fillStyle = '#2a2a30'; ctx.fillRect(cx - 30, base - 30 - k * 38, 60, 6); }
+      ctx.restore(); return;
+    }
+    // portes enfoncées : la lumière déferle
+    Art.glowAt(cx, base - 70, 120 + a * 160, 'rgba(255,240,180,' + (0.35 + 0.25 * a) + ')');
+    arch(); ctx.fillStyle = '#fff6d0'; ctx.fill();
+    ctx.save(); ctx.globalAlpha = 0.18 * a; ctx.fillStyle = '#fff2c0';
+    for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(cx - 18, base - 40); ctx.lineTo(cx + 18, base - 40); ctx.lineTo(cx + k * 70 + 60, H); ctx.lineTo(cx + k * 70 - 60, H); ctx.fill(); }
+    ctx.restore();
+    // battants arrachés au sol
+    ctx.save(); ctx.translate(cx - 70, base - 6); ctx.rotate(-0.25); ctx.fillStyle = '#5a3a1e'; ctx.fillRect(-28, -10, 56, 14); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(-28, -10, 56, 14); ctx.restore();
+    ctx.save(); ctx.translate(cx + 74, base - 4); ctx.rotate(0.18); ctx.fillStyle = '#5a3a1e'; ctx.fillRect(-26, -9, 52, 12); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(-26, -9, 52, 12); ctx.restore();
   },
   draw() {
-    bgNight('#140a22', '#060309');
-    // ciel étoilé
-    for (let i = 0; i < 40; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.3 + 0.3 * Math.sin(time * 2 + i)) + ')'; ctx.fillRect((i * 97) % W, (i * 53) % 300, 2, 2); }
-    // cathédrale
-    const cx = 300;
-    ctx.fillStyle = '#2a2440'; ctx.strokeStyle = C.ink; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(cx - 80, 430); ctx.lineTo(cx - 80, 250); ctx.lineTo(cx - 50, 160); ctx.lineTo(cx - 20, 250); ctx.lineTo(cx + 20, 250); ctx.lineTo(cx + 50, 120); ctx.lineTo(cx + 80, 250); ctx.lineTo(cx + 80, 430); ctx.closePath(); ctx.fill(); ctx.stroke();
-    Art.glowAt(cx, 360, this.broke ? 200 : 60, this.broke ? 'rgba(255,240,180,0.55)' : 'rgba(255,240,180,0.3)');
-    if (!this.broke) { ctx.fillStyle = '#6a4a2a'; ctx.fillRect(cx - 30, 320, 60, 110); ctx.strokeRect(cx - 30, 320, 60, 110); ctx.beginPath(); ctx.moveTo(cx, 320); ctx.lineTo(cx, 430); ctx.stroke(); }
-    else { ctx.fillStyle = '#fff6d0'; ctx.fillRect(cx - 30, 320, 60, 110); }
-    // sol
-    ctx.fillStyle = '#0d0716'; ctx.fillRect(0, 430, W, H - 430);
-    // Titan
-    const parts = S.titanDraft ? S.titanDraft.parts : DEMO;
-    const k = clamp(this.t / 5.4, 0, 1);
-    const x = lerp(-60, 196, k) + (this.t > 5.2 && this.t < 5.7 ? (this.t - 5.2) * 80 : 0);
-    Art.creature(parts, x, 430 - 1.14 * 70, 70, { t: this.t, atk: this.t > 5.2 && this.t < 5.8 ? (this.t - 5.2) / 0.6 : 0, eye: '#d6ffb8' });
+    this.drawCathedral();
+    this.drawDoor();
+    // le Titan cousu par le joueur, en grand
+    const parts = S.titanDraft && Object.keys(S.titanDraft.parts).length ? S.titanDraft.parts : DEMO, size = 92;
+    const foot = Art.creatureFoot(parts), bob = this.t < 5 ? Math.abs(Math.sin(this.t / 0.8 * Math.PI)) * -4 : 0;
+    Art.glowAt(this.titanX(), END_DOOR.y - 90, 120, 'rgba(125,255,74,0.18)');
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(this.titanX(), END_DOOR.y + 4, 70, 10, 0, 0, 7); ctx.fill();
+    Art.creature(parts, this.titanX(), END_DOOR.y - foot * size + bob, size, { t: this.t, atk: this.t > 5 && this.t < 5.6 ? (this.t - 5) / 0.6 : 0, eye: '#d6ffb8' });
+    // texte de fin
     if (this.t > 6.2) {
-      const a = clamp((this.t - 6.2) / 1, 0, 1); ctx.globalAlpha = a;
-      txtWrap(t('end_text'), W / 2, 80, 320, 18, C.text);
+      ctx.globalAlpha = clamp(this.t - 6.2, 0, 1);
+      ctx.fillStyle = 'rgba(7,4,11,0.55)'; ctx.fillRect(0, 22, W, 92);
+      txtWrap(t('end_text'), W / 2, 56, 320, 19, C.text);
       ctx.globalAlpha = 1;
     }
-    if (this.t > 8) { ctx.globalAlpha = clamp(this.t - 8, 0, 1); txtWrap(t('credits'), W / 2, 470, 320, 12, C.dim); ctx.globalAlpha = 1; }
+    // générique (au format des autres jeux du studio)
+    if (this.t > 8.4) {
+      const a = clamp((this.t - 8.4) / 0.8, 0, 1);
+      ctx.globalAlpha = a; ctx.fillStyle = 'rgba(7,4,11,0.86)'; ctx.fillRect(0, 462, W, H - 462); ctx.globalAlpha = 1;
+      const L = t('credits_l');
+      L.forEach((line, i) => {
+        const la = clamp((this.t - 8.8 - i * 0.55) / 0.6, 0, 1); if (!la) return;
+        ctx.globalAlpha = la;
+        if (i === 0) { ctx.font = 'italic 700 17px ' + FONT; ctx.fillStyle = C.gold; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = C.ink; ctx.lineWidth = 4; ctx.strokeText(line, W / 2, 482 + (1 - la) * 6); ctx.fillText(line, W / 2, 482 + (1 - la) * 6); }
+        else txt(line, W / 2, 486 + i * 16 + (1 - la) * 6, 12, i === L.length - 1 ? C.toxic : C.dim);
+        ctx.globalAlpha = 1;
+      });
+    }
     if (this.btn.show) UI.drawBtn(this.btn);
   },
-  down(p) { if (this.btn.show) UI.down([this.btn], p); else if (this.t > 2) this.t = Math.max(this.t, 6.5); },
+  down(p) { if (this.btn.show) UI.down([this.btn], p); else if (this.t > 2 && this.t < 6.5) this.t = 6.5; else if (this.t >= 6.5) this.t = Math.max(this.t, 13); },
   up(p) { UI.up([this.btn], p); }
 };
 
@@ -3346,8 +3543,9 @@ function frame(now) {
   if (fade.dir === 1) { fade.t += dt * 5; if (fade.t >= 1) { fade.t = 1; fade.dir = -1; FX.clear(); Hint.clear(); goNow(fade.next, fade.arg); } }
   else if (fade.dir === -1) { fade.t -= dt * 5; if (fade.t <= 0) { fade.t = 0; fade.dir = 0; } }
   try {
-    if (scene && scene.update) scene.update(dt);
-    FX.update(dt); Toast.update(dt); Hint.update(dt);
+    if (FX.stop > 0) FX.stop -= dt; // arrêt sur image : la scène et les effets se figent un instant
+    else { if (scene && scene.update) scene.update(dt); FX.update(dt); }
+    Toast.update(dt); Hint.update(dt);
     render();
   } catch (e) { console.error(e); }
   requestAnimationFrame(frame);
@@ -3406,6 +3604,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|a
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // Accès de test (console) : window.NECRO
-window.NECRO = { get S() { return S; }, Scenes, go: goNow, Logic, D, Art };
+window.NECRO = { get S() { return S; }, Scenes, go: goNow, Logic, D, Art, get view() { return view; }, get H() { return H; }, get BAR_Y() { return BAR_Y; }, get FLOOR() { return FLOOR; } };
 Scenes.icon = { draw() { ctx.fillStyle = '#140b1e'; ctx.fillRect(0, 0, W, H); Art.glowAt(180, 320, 200, 'rgba(125,255,74,0.35)'); Art.creature(DEMO, 180, 333, 128, { still: true, t: 0.4 }); } };
 })();
