@@ -1968,7 +1968,7 @@ const POST_X = [[132, 250], [232, 112], [118, 232]];
 const ROOM_DIR = [1, -1, 1];
 // recul minimal : un héros repoussé reste à portée des créatures (bord gauche de l'étage 1 à x≈26)
 // Marge d'entrée : un héros repoussé ne recule pas jusqu'au bord par où arrivent les suivants (le combat reste visible)
-const PUSH_MIN_S = 40, ENTRY_MARGIN = 72, HOLD_LEASH = 36, RANGED_STOP = 70; // tireurs : s'approchent à 70 px pour tirer (combat au milieu de l'écran)
+const PUSH_MIN_S = 40, ENTRY_MARGIN = 72, HOLD_LEASH = 36, RIPOSTE_LEASH = 100, RANGED_STOP = 70; // tireurs : s'approchent à 70 px pour tirer (combat au milieu de l'écran)
 function pushBack(h, d) {
   const floor = h.room >= 0 ? ROOM_S0[h.room] + ENTRY_MARGIN + (h.room === 0 ? 14 : 0) : PUSH_MIN_S;
   h.s = Math.max(Math.min(h.s, floor), h.s - d); const p = pathPos(h.s); h.x = p.x; h.y = p.y; h.room = p.room;
@@ -2080,7 +2080,7 @@ Scenes.crypt = {
     this.gap = lerp(D.spawnGap[0], D.spawnGap[1], (clamp(n, 1, 10) - 1) / 9);
     this.waveLost = false;
     Hint.clear(); this.tutoHint();
-    if (!tuto) Toast.show(this.run.endless ? t('wave_n', { n: this.run.wave + 1 }) : t('wave_x', { n: this.run.wave + 1, m: this.run.waves }));
+    if (!tuto) this.waveFlash = time; // l'annonce de vague s'affiche dans l'en-tête, pas sur l'étage du haut où arrivent les héros
   },
   spawn(kind) {
     const pw = this.power();
@@ -2256,7 +2256,7 @@ Scenes.crypt = {
       if (tg) {
         u.flip = tg.x > u.x;
         // la créature de tête ne quitte pas son poste (petite marge) : elle attend que les héros viennent à elle
-        if (bd > st.range) { const nx = u.x + Math.sign(tg.x - u.x) * spd * dt; if (!u.hold || Math.abs(nx - u.post) <= HOLD_LEASH || bd <= tg.range + 14) u.x = nx; } // sauf pour riposter à un héros qui la frappe
+        if (bd > st.range) { const nx = u.x + Math.sign(tg.x - u.x) * spd * dt; if (!u.hold || Math.abs(nx - u.post) <= HOLD_LEASH || (bd <= tg.range + 14 && Math.abs(nx - u.post) <= RIPOSTE_LEASH)) u.x = nx; } // riposte à un héros qui la frappe, sans quitter le milieu de l'étage
         else { u.cd -= dt; if (u.cd <= 0) { u.cd = st.rate; u.atk = 1; this.creatureAttack(u, tg); } }
       } else {
         u.cd = Math.max(0, u.cd - dt);
@@ -2645,7 +2645,9 @@ Scenes.crypt = {
     topBar(52);
     const r = this.run;
     const title = r.endless ? t('endless') + ' · ' + t('wave_n', { n: r.wave + 1 }) : t('night_n', { n: r.night }) + ' · ' + (this.phase === 'tuto' ? t('tutorial') : t('wave_x', { n: Math.min(r.wave + 1, r.waves), m: r.waves }));
-    txt(title, 180, 16, 15, C.text);
+    const wf = this.waveFlash ? clamp(1 - (time - this.waveFlash) / 1.6, 0, 1) : 0;
+    if (wf > 0) Art.glowAt(180, 18, 70, 'rgba(125,255,74,' + (0.45 * wf) + ')');
+    txt(title, 180, 16, Math.round(15 + 4 * wf), wf > 0 ? C.toxic : C.text);
     const left = this.queue.length + this.heroes.filter(h => !h.dead).length;
     if (this.phase === 'wave' && !(this.boss && !this.boss.dead)) txt(t('heroes_left', { n: left }), 180, 36, 11, C.dim);
     else txt(t('souls_n', { n: S.souls }), 180, 36, 11, C.toxic);
@@ -2809,12 +2811,13 @@ function graveyard(y) {
 const DEMO = { back: { k: 'm_wings', r: 0 }, head: { k: 'g_head', r: 1 }, torso: { k: 'p_ribs', r: 0 }, arm0: { k: 'r_blade', r: 0 }, arm1: { k: 'm_hand', r: 0 }, legs: { k: 'r_legs', r: 0 }, core: { k: 'p_heart', r: 0 } };
 // Écran de démarrage : illustration (bg_splash si présente), titre, chargement des images, puis « Touche pour commencer »
 Scenes.splash = {
+  tall: true,
   enter() { this.t = 0; this.ready = false; },
   update(dt) { if (document.getElementById('studio')) return; this.t += dt; if (!this.ready && (Art.progress() >= 1 || this.t > 10) && this.t > 0.6) { this.ready = true; this.readyT = this.t; } },
   up(p) {
     if (!this.ready) return;
     Sfx.play('tap');
-    if (p && p.y > 600) { go('notes', { back: 'splash' }); return; }
+    if (p && p.y > H - 40) { go('notes', { back: 'splash' }); return; }
     // après une mise à jour, les joueurs qui ont déjà une partie voient d'abord les nouveautés
     if ((S.tuto > 0 || S.cleared > 0) && pnSeen() !== PN[0].v) { go('notes', { start: true }); return; }
     pnMark(); startGame();
@@ -2836,14 +2839,14 @@ Scenes.splash = {
     drawTitle(W / 2, 74);
     if (!this.ready) {
       const p = Art.progress();
-      rr(80, 560, 200, 12, 6); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
-      if (p > 0) { rr(82, 562, 196 * p, 8, 4); ctx.fillStyle = C.toxic; ctx.fill(); }
-      txt(t('loading'), W / 2, 590, 12, C.dim);
+      rr(80, H - 80, 200, 12, 6); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+      if (p > 0) { rr(82, H - 78, 196 * p, 8, 4); ctx.fillStyle = C.toxic; ctx.fill(); }
+      txt(t('loading'), W / 2, H - 50, 12, C.dim);
     } else {
       ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin((this.t - this.readyT) * 3.5));
-      txt(t('tap_start'), W / 2, 572, 18, C.bone, 'center', { sw: 5 });
+      txt(t('tap_start'), W / 2, H - 68, 18, C.bone, 'center', { sw: 5 });
       ctx.globalAlpha = a;
-      txt('v' + PN[0].v + ' · ' + t('tap_notes'), W / 2, 620, 11, 'rgba(236,224,195,0.7)', 'center', { sw: 3 });
+      txt('v' + PN[0].v + ' · ' + t('tap_notes'), W / 2, H - 20, 11, 'rgba(236,224,195,0.7)', 'center', { sw: 3 });
     }
     ctx.globalAlpha = 1;
   }
@@ -2887,6 +2890,13 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.4', d: ['17 octobre 2026', '17 October 2026'],
+    fr: ['L\'écran titre, la carte, la boutique, le bestiaire, les réglages, les nouveautés et le broyeur occupent tout l\'écran des téléphones allongés.',
+      'La créature de tête ne se laisse plus attirer jusqu\'à l\'entrée par les tireurs : elle riposte sans quitter le milieu de l\'étage.',
+      'L\'annonce de vague s\'allume dans l\'en-tête au lieu de masquer l\'étage du haut.'],
+    en: ['The title screen, map, shop, bestiary, settings, patch notes and grinder now fill the whole screen on tall phones.',
+      'The front creature no longer gets lured to the entrance by ranged heroes: it fights back without leaving the middle of the floor.',
+      'The wave announcement now lights up in the header instead of covering the top floor.'] },
   { v: '1.3', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['Trois vraies musiques : la crypte, l\'atelier et la marche du Titan, avec un fondu entre les morceaux.'],
     en: ['Three real music tracks: the crypt, the workshop and the Titan\'s march, with a fade between tracks.'] },
@@ -2926,6 +2936,7 @@ const PN_KEY = 'necro_crypte_pn';
 function pnSeen() { try { return localStorage.getItem(PN_KEY); } catch (_) { return PN[0].v; } }
 function pnMark() { try { localStorage.setItem(PN_KEY, PN[0].v); } catch (_) {} }
 Scenes.notes = {
+  tall: true,
   enter(arg) {
     this.arg = arg || {}; this.scroll = 0; pnMark();
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => this.close() });
@@ -2949,8 +2960,8 @@ Scenes.notes = {
       });
       y += h + 10;
     });
-    this.maxScroll = Math.max(0, y + this.scroll - 600);
-    if (this.arg.start) { const b = UI.btn({ x: 90, y: 568, w: 180, h: 48, label: t('continue'), style: 'green' }); this.go = b; UI.drawBtn(b); } else this.go = null;
+    this.maxScroll = Math.max(0, y + this.scroll - (H - 40));
+    if (this.arg.start) { const b = UI.btn({ x: 90, y: H - 72, w: 180, h: 48, label: t('continue'), style: 'green' }); this.go = b; UI.drawBtn(b); } else this.go = null;
     topBar(52);
     banner(t('notes_title'), 180, 25, 17);
     UI.drawBtn(this.back);
@@ -2965,13 +2976,18 @@ Scenes.notes = {
 };
 
 // ============================== Scène : Carte des nuits ==============================
-const NODES = [[92, 512], [238, 476], [120, 432], [262, 392], [104, 348], [236, 306], [96, 264], [244, 222], [124, 178], [210, 128]];
+const NODES0 = [[92, 512], [238, 476], [120, 432], [262, 392], [104, 348], [236, 306], [96, 264], [244, 222], [124, 178], [210, 128]];
+// les nuits s'étalent sur la hauteur disponible (téléphones allongés)
+let NODES = NODES0;
+function mapLayout() { const k = (H - 128 - 120) / (512 - 120); NODES = NODES0.map(([x, y]) => [x, Math.round(120 + (y - 120) * k)]); }
 Scenes.map = {
+  tall: true,
+  relayout() { mapLayout(); const y = H - 74; if (this.btns) this.btns.slice(1).forEach(b => { b.y = y; }); },
   enter() {
-    this.sel = null;
+    this.sel = null; mapLayout();
     Hint.clear();
     if (S.cleared >= 2 && !S.hints.shop) { S.hints.shop = 1; Toast.show(t('hint_shop')); }
-    const bw = 84, y = 566, bh = 46;
+    const bw = 84, y = H - 74, bh = 46;
     this.btns = [
       UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('splash') }),
       UI.btn({ x: 6, y, w: bw, h: bh, icon: 'altar', label: '', sub: true, style: 'main', on: () => go('atelier', { from: 'map' }) }),
@@ -3059,7 +3075,7 @@ Scenes.map = {
     if (done) for (let i = 0; i < 3; i++) Art.icon(i < st ? 'star' : 'star0', x - 16 + i * 16, y + 29 - (i === 1 ? 3 : 0), i === 1 ? 16 : 14);
   },
   drawInfo() {
-    const n = this.sel, y = n > 5 ? 330 : 120;
+    const n = this.sel, y = n > 5 ? H - 310 : 120;
     panel(20, y, 320, 150, 'rgba(36,22,58,0.97)', 14);
     txt(t('night_n', { n }) + (D.bosses[n] ? ' · ' + t('boss_' + D.bosses[n].id) : ''), 34, y + 22, 15, D.bosses[n] ? C.legend : C.text, 'left');
     txtWrap(t('night_desc_' + n), 34, y + 48, 290, 12, C.dim, 'left');
@@ -3079,12 +3095,13 @@ Scenes.map = {
     const i = NODES.findIndex(n => dist(p.x, p.y, n[0], n[1]) < 30);
     if (i >= 0 && i + 1 <= S.cleared + 1) { this.sel = this.sel === i + 1 ? null : i + 1; Sfx.play('tap'); }
     else if (i >= 0) { Toast.show(t('locked_night')); Sfx.play('error'); }
-    else if (this.sel) { const n = this.sel, y = n > 5 ? 330 : 120; if (p.y < y || p.y > y + 150) this.sel = null; }
+    else if (this.sel) { const n = this.sel, y = n > 5 ? H - 310 : 120; if (p.y < y || p.y > y + 150) this.sel = null; }
   }
 };
 
 // ============================== Scène : Boutique ==============================
 Scenes.shop = {
+  tall: true,
   enter() { this.scroll = 0; this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('map') }); },
   owns(it) {
     const [cat, id] = it.id.split('_');
@@ -3152,6 +3169,7 @@ Scenes.shop = {
 // ============================== Scène : Bestiaire / Grimoire ==============================
 const HERO_LIST = ['peasant', 'warrior', 'rogue', 'mage', 'priest', 'paladin', 'captain', 'archmage', 'queen', 'highpriest', 'archangel'];
 Scenes.bestiary = {
+  tall: true,
   enter(arg) { this.backTo = (arg && arg.back) || 'map'; this.tab = this.tab || 0; this.scroll = 0; this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go(this.backTo) }); },
   update() {},
   rows() { return this.tab === 0 ? S.best.creatures.length : this.tab === 1 ? D.recipes.length : HERO_LIST.length; },
@@ -3223,14 +3241,17 @@ Scenes.bestiary = {
 // ============================== Scène : Broyeur (broyage en masse) ==============================
 const GR_MILL = { y: 590 };
 Scenes.grinder = {
+  tall: true,
+  relayout() { this.GRID.h = H - 244; GR_MILL.y = H - 50; if (this.btns) { [this.bAll, this.bDup, this.bNone].forEach(b => { b.y = H - 102; }); this.bGo.y = H - 56; } },
   enter(arg) {
+    this.relayout();
     this.from = (arg && arg.from) || 'map';
     this.slot = 'all'; this.rar = [true, true, false]; this.sel = new Set(); this.scroll = 0; this.press = null; this.confirm = -1e9;
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go('atelier', { from: this.from }) });
-    this.bAll = UI.btn({ x: 8, y: 538, w: 84, h: 38, label: t('gr_all'), size: 12, style: 'dark', on: () => { const l = this.list(); const allOn = l.every(p => this.sel.has(p.id)); l.forEach(p => allOn ? this.sel.delete(p.id) : this.sel.add(p.id)); } });
-    this.bDup = UI.btn({ x: 98, y: 538, w: 108, h: 38, label: t('gr_dups'), size: 12, style: 'dark', on: () => this.selectDups() });
-    this.bNone = UI.btn({ x: 212, y: 538, w: 140, h: 38, label: t('gr_none'), size: 12, style: 'dark', on: () => { this.sel.clear(); this.confirm = -1e9; } });
-    this.bGo = UI.btn({ x: 8, y: 584, w: 344, h: 50, label: '', size: 15, style: 'red', on: () => this.grindSel() });
+    this.bAll = UI.btn({ x: 8, y: H - 102, w: 84, h: 38, label: t('gr_all'), size: 12, style: 'dark', on: () => { const l = this.list(); const allOn = l.every(p => this.sel.has(p.id)); l.forEach(p => allOn ? this.sel.delete(p.id) : this.sel.add(p.id)); } });
+    this.bDup = UI.btn({ x: 98, y: H - 102, w: 108, h: 38, label: t('gr_dups'), size: 12, style: 'dark', on: () => this.selectDups() });
+    this.bNone = UI.btn({ x: 212, y: H - 102, w: 140, h: 38, label: t('gr_none'), size: 12, style: 'dark', on: () => { this.sel.clear(); this.confirm = -1e9; } });
+    this.bGo = UI.btn({ x: 8, y: H - 56, w: 344, h: 50, label: '', size: 15, style: 'red', on: () => this.grindSel() });
     this.btns = [this.back, this.bAll, this.bDup, this.bNone, this.bGo];
     this.anim = null;
   },
@@ -3355,6 +3376,7 @@ Scenes.grinder = {
 
 // ============================== Scène : Réglages ==============================
 Scenes.settings = {
+  tall: true,
   enter(arg) {
     this.backTo = (arg && arg.back) || 'map'; this.confirm = -1e9;
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go(this.backTo, { resume: true }) });
