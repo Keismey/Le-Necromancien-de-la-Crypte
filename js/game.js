@@ -2746,7 +2746,7 @@ const DEMO = { back: { k: 'm_wings', r: 0 }, head: { k: 'g_head', r: 1 }, torso:
 // Écran de démarrage : illustration (bg_splash si présente), titre, chargement des images, puis « Touche pour commencer »
 Scenes.splash = {
   enter() { this.t = 0; this.ready = false; },
-  update(dt) { this.t += dt; if (!this.ready && (Art.progress() >= 1 || this.t > 10) && this.t > 0.6) { this.ready = true; this.readyT = this.t; } },
+  update(dt) { if (document.getElementById('studio')) return; this.t += dt; if (!this.ready && (Art.progress() >= 1 || this.t > 10) && this.t > 0.6) { this.ready = true; this.readyT = this.t; } },
   up(p) {
     if (!this.ready) return;
     Sfx.play('tap');

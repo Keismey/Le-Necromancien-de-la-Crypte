@@ -16,10 +16,23 @@
   html, body { margin: 0; padding: 0; height: 100%; background: #07040b; overflow: hidden; }
   body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
   canvas { display: block; touch-action: none; }
+  /* Logo Keismey Studio avant l'écran titre (comme les autres jeux du studio) */
+  #studio { position: fixed; inset: 0; background: #000; display: grid; place-items: center; z-index: 90; transition: opacity .6s; }
+  #studio img { width: min(56%, 230px); opacity: 0; animation: fin 1s ease .15s forwards; }
+  @keyframes fin { to { opacity: 1; } }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="studio"><img alt="Keismey Studio" src="assets/studio_logo.webp"></div>
+<script>
+(function () {
+  const sp = document.getElementById('studio'); let done = false;
+  const hide = e => { if (e) e.preventDefault(); if (done) return; done = true; sp.style.opacity = 0; setTimeout(() => sp.remove(), 600); };
+  if (/[?&]nosplash/.test(location.search)) { sp.remove(); return; }
+  setTimeout(hide, 2300); sp.addEventListener('pointerdown', hide);
+})();
+</script>
 <script src="js/lang.js"></script>
 <script src="js/data.js"></script>
 <script src="js/assets.js"></script>
