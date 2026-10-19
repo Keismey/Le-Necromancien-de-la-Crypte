@@ -80,6 +80,7 @@
 
   function back(fromKey) {
     var r;
+    if (window.KS && window.KS.closeDialog && window.KS.closeDialog()) return;   // fenêtre « Sauvegarde » commune
     try { r = cfg.back(); } catch (e) { r = null; if (window.console) console.error(e); }
     if (r === 'hub' && !fromKey) toHub();
   }

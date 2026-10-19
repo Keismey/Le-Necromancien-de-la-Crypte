@@ -92,7 +92,7 @@ function newState() {
   return {
     v: SAVE_VER,
     lang: nav.startsWith('fr') ? 'fr' : 'en',
-    set: { sound: true, music: true },
+    set: { sound: true, music: true, mv: 1, sv: 1 },
     nextId: 1,
     cleared: 0,                 // dernière nuit terminée
     stars: {},                  // nuit → étoiles
@@ -122,6 +122,7 @@ const Save = {
             const d = b[k], v = o[k];
             b[k] = (d && v && typeof d === 'object' && typeof v === 'object' && !Array.isArray(d) && !Array.isArray(v)) ? Object.assign(d, v) : v;
           }
+          if (o.set && o.set.mv === undefined) { b.set.mv = o.set.music === false ? 0 : 1; b.set.sv = o.set.sound === false ? 0 : 1; }
           S = b; return true;
         }
       }
@@ -151,8 +152,8 @@ const Sfx = (function () {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
     try {
       ac = new (window.AudioContext || window.webkitAudioContext)();
-      master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
-      musicGain = ac.createGain(); musicGain.gain.value = 0.18; musicGain.connect(ac.destination);
+      master = ac.createGain(); master.gain.value = 0.5 * S.set.sv; master.connect(ac.destination);
+      musicGain = ac.createGain(); musicGain.gain.value = 0.18 * S.set.mv; musicGain.connect(ac.destination);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       Music.apply();
@@ -205,7 +206,7 @@ const Sfx = (function () {
     boom: () => { noise(120, 0.8, 0.9, 0.7, 0, 'lowpass'); tone('sine', 90, 30, 0.8, 0.4); }
   };
   function play(name) {
-    if (!ac || !S || !S.set.sound) return;
+    if (!ac || !S || !S.set.sv) return;
     if (samples[name]) { try { const s = ac.createBufferSource(); s.buffer = samples[name]; s.playbackRate.value = 0.94 + Math.random() * 0.12; s.connect(master); s.start(); } catch (_) {} return; }
     if (!lib[name]) return;
     try { lib[name](); } catch (_) {}
@@ -220,10 +221,10 @@ const Sfx = (function () {
       clearInterval(this.timer); this.timer = null;
       if (music) { try { music.forEach(n => n.stop()); } catch (_) {} music = null; }
       if (this.audio) { const old = this.audio; this.audio = null; const f = setInterval(() => { old.volume = Math.max(0, old.volume - 0.06); if (old.volume <= 0) { old.pause(); clearInterval(f); } }, 40); setTimeout(() => { old.pause(); clearInterval(f); }, 800); } // fondu de sortie (iOS ignore volume : arrêt forcé)
-      if (!S.set.music || !this.cur) return;
+      if (!S.set.mv || !this.cur) return;
       const name = this.cur;
       if ((window.MUSIC_LIST || []).indexOf(name) >= 0) {
-        const a = new Audio('assets/music_' + name + '.mp3'); a.loop = true; a.volume = 0.4; this.audio = a;
+        const a = new Audio('assets/music_' + name + '.mp3'); a.loop = true; a.volume = 0.4 * S.set.mv; this.audio = a;
         a.play().catch(() => {}); return;
       }
       const base = name === 'atelier' ? 65.4 : name === 'titan' ? 73.4 : 55;
@@ -235,7 +236,7 @@ const Sfx = (function () {
       });
       const notes = name === 'titan' ? [0, 3, 7, 10, 12, 15] : [0, 3, 7, 8, 12];
       this.timer = setInterval(() => {
-        if (!S.set.music || document.hidden) return;
+        if (!S.set.mv || document.hidden) return;
         const t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
         o.type = name === 'atelier' ? 'triangle' : 'sine';
         o.frequency.value = base * 4 * Math.pow(2, pick(notes) / 12);
@@ -256,7 +257,15 @@ const Sfx = (function () {
     if (!ac) return;
     if (document.hidden) ac.suspend(); else ac.resume();
   });
-  return { unlock, play, Music };
+  // volumes des Options (S.set.mv / S.set.sv, de 0 à 1) : appliqués tout de suite
+  function volume() {
+    if (!ac) return;
+    master.gain.value = 0.5 * S.set.sv; musicGain.gain.value = 0.18 * S.set.mv;
+    if (Music.audio) Music.audio.volume = 0.4 * S.set.mv;
+    if (!S.set.mv && (Music.audio || Music.timer)) Music.apply();
+    else if (S.set.mv && !Music.audio && !Music.timer) Music.apply();
+  }
+  return { unlock, play, Music, volume };
 })();
 
 // ============================== Palette & texte ==============================
@@ -2860,7 +2869,6 @@ Scenes.splash = {
   up(p) {
     if (!this.ready) return;
     Sfx.play('tap');
-    if (p && p.y > H - 40) { go('notes', { back: 'splash' }); return; }
     // après une mise à jour, les joueurs qui ont déjà une partie voient d'abord les nouveautés
     if ((S.tuto > 0 || S.cleared > 0) && pnSeen() !== PN[0].v) { go('notes', { start: true }); return; }
     pnMark(); startGame();
@@ -2890,7 +2898,7 @@ Scenes.splash = {
       ctx.globalAlpha = a * (0.8 + 0.2 * pu);
       txt(t('tap_start'), W / 2, H - 68, 18 + pu * 0.8, C.bone, 'center', { sw: 5 });
       ctx.globalAlpha = a;
-      txt('v' + PN[0].v + ' · ' + t('tap_notes'), W / 2, H - 20, 11, 'rgba(236,224,195,0.7)', 'center', { sw: 3 });
+      txt('v' + PN[0].v + ' · Keismey Studio', W / 2, H - 20, 11, 'rgba(236,224,195,0.7)', 'center', { sw: 3 });
     }
     ctx.globalAlpha = 1;
   }
@@ -2934,6 +2942,9 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.8', d: ['19 octobre 2026', '19 October 2026'],
+    fr: ['Réglages : volume de la musique et des bruitages, sauvegarde à exporter ou importer (pour changer d\'appareil), signalement de bug et soutien au studio.', 'Le navigateur est invité à garder ta sauvegarde même quand il fait du ménage.'],
+    en: ['Settings: music and sound effects volume, a save you can export or import (to switch devices), bug reports and studio support.', 'The browser is asked to keep your save even when it clears space.'] },
   { v: '1.7', d: ['19 octobre 2026', '19 October 2026'],
     fr: ['Le bouton retour du téléphone ne quitte plus le jeu : il revient à l\'écran précédent, met la nuit en pause, et depuis la carte propose de revenir à l\'écran titre. Depuis l\'écran titre, il propose d\'aller au hub Keismey Studio.'],
     en: ['The phone\'s back button no longer leaves the game: it returns to the previous screen, pauses the night, and from the map offers to go back to the title screen. From the title screen, it offers to go to the Keismey Studio hub.'] },
@@ -3448,50 +3459,73 @@ Scenes.grinder = {
 Scenes.settings = {
   tall: true,
   enter(arg) {
-    this.backTo = (arg && arg.back) || 'map'; this.confirm = -1e9;
+    this.backTo = (arg && arg.back) || 'map'; this.confirm = -1e9; this.drag = null;
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go(this.backTo, { resume: true }) });
     this.rows = [
-      { k: 'lang', icon: 'flag' }, { k: 'sound', icon: 'sound' }, { k: 'music', icon: 'music' }, { k: 'notes', icon: 'book' }
+      { k: 'lang', icon: 'flag' }, { k: 'music', icon: 'music', vol: 'mv' }, { k: 'sound', icon: 'sound', vol: 'sv' },
+      { k: 'notes', icon: 'book' }, { k: 'save', icon: 'check' }, { k: 'bug', icon: 'skull' }, { k: 'support', icon: 'heart' }
     ];
   },
   update() {},
-  rowY(i) { return 70 + i * 62; },
+  rowY(i) { return 62 + i * 56; },
+  // curseur de volume : piste de SX0 à SX1
+  SX0: 196, SX1: 330,
+  setVol(r, x) {
+    const v = Math.round(clamp((x - this.SX0) / (this.SX1 - this.SX0), 0, 1) * 20) / 20;
+    if (S.set[r.vol] === v) return;
+    S.set[r.vol] = v; Sfx.volume();
+  },
   draw() {
     bgNight();
     topBar(52);
     banner(t('settings'), 180, 25, 17);
     this.rows.forEach((r, i) => {
       const y = this.rowY(i);
-      panel(10, y, 340, 54, C.panel, 10);
-      Art.icon(r.icon, 38, y + 27, 30);
-      txt(t('set_' + r.k), 64, y + 20, 15, C.text, 'left');
-      txt(r.k === 'notes' ? 'v' + PN[0].v + ' · ' + PN[0].d[S.lang === 'fr' ? 0 : 1] : t('setd_' + r.k), 64, y + 39, 10, C.dim, 'left', { stroke: false });
-      if (r.k === 'notes') txt('›', 322, y + 26, 30, C.bone);
-      else if (r.k === 'lang') { rr(262, y + 11, 78, 32, 10); ctx.fillStyle = C.violet; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke(); txt(S.lang === 'fr' ? 'Français' : 'English', 301, y + 28, 12); }
-      else {
-        const on = S.set[r.k];
-        rr(282, y + 13, 56, 28, 14); ctx.fillStyle = on ? C.toxicD : '#3a3044'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke();
-        ctx.beginPath(); ctx.arc(on ? 324 : 296, y + 27, 11, 0, 7); ctx.fillStyle = on ? C.toxic : C.dim; ctx.fill(); ctx.stroke();
+      panel(10, y, 340, 50, C.panel, 10);
+      Art.icon(r.vol === 'sv' && !S.set.sv ? 'mute' : r.icon, 36, y + 25, 26);
+      if (r.vol) {
+        const v = S.set[r.vol];
+        txt(t('set_' + r.k), 60, y + 18, 14, C.text, 'left');
+        txt(Math.round(v * 100) + ' %', 60, y + 36, 10, C.dim, 'left', { stroke: false });
+        rr(this.SX0, y + 21, this.SX1 - this.SX0, 8, 4); ctx.fillStyle = '#3a3044'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+        if (v > 0) { rr(this.SX0, y + 21, (this.SX1 - this.SX0) * v, 8, 4); ctx.fillStyle = C.toxicD; ctx.fill(); }
+        ctx.beginPath(); ctx.arc(this.SX0 + (this.SX1 - this.SX0) * v, y + 25, 11, 0, 7); ctx.fillStyle = v > 0 ? C.toxic : C.dim; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke();
+        return;
       }
+      txt(t('set_' + r.k), 60, y + 18, 14, C.text, 'left');
+      txt(r.k === 'notes' ? 'v' + PN[0].v + ' · ' + PN[0].d[S.lang === 'fr' ? 0 : 1] : t('setd_' + r.k), 60, y + 36, 10, C.dim, 'left', { stroke: false });
+      if (r.k === 'lang') { rr(262, y + 9, 78, 32, 10); ctx.fillStyle = C.violet; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke(); txt(S.lang === 'fr' ? 'Français' : 'English', 301, y + 26, 12); }
+      else txt('›', 322, y + 24, 30, C.bone);
     });
-    const y = this.rowY(this.rows.length) + 10;
-    rr(90, y, 180, 44, 12); ctx.fillStyle = '#5a1a2a'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
-    txt(time - this.confirm < 3 ? t('sure') : t('reset_save'), 180, y + 23, 14, '#ffc0c0');
+    const y = this.rowY(this.rows.length) + 8;
+    rr(90, y, 180, 40, 12); ctx.fillStyle = '#5a1a2a'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.ink; ctx.stroke();
+    txt(time - this.confirm < 3 ? t('sure') : t('reset_save'), 180, y + 21, 14, '#ffc0c0');
+    txt('v' + PN[0].v + ' · Keismey Studio', 180, y + 60, 10, C.dim, 'center', { stroke: false });
     UI.drawBtn(this.back);
   },
-  down(p) { if (UI.down([this.back], p)) return; },
+  rowAt(p) { return this.rows.find((r, i) => { const y = this.rowY(i); return p.y >= y && p.y <= y + 50; }); },
+  down(p) {
+    if (UI.down([this.back], p)) return;
+    const r = this.rowAt(p);
+    if (r && r.vol && p.x > this.SX0 - 24) { this.drag = r; this.setVol(r, p.x); }
+  },
+  move(p) { if (this.drag) this.setVol(this.drag, p.x); },
   up(p) {
+    if (this.drag) { const r = this.drag; this.drag = null; Save.save(); if (r.vol === 'sv') Sfx.play('tap'); return; }
     if (UI.pressed) { UI.up([this.back], p); return; }
-    this.rows.forEach((r, i) => {
-      const y = this.rowY(i); if (p.y < y || p.y > y + 54) return;
-      if (r.k === 'notes') { Sfx.play('tap'); go('notes', { back: 'settings', backArg: { back: this.backTo } }); return; }
-      if (r.k === 'lang') S.lang = S.lang === 'fr' ? 'en' : 'fr';
-      else S.set[r.k] = !S.set[r.k];
-      if (r.k === 'music') Sfx.Music.apply();
-      Sfx.play('tap'); Save.save(); this.enter({ back: this.backTo });
-    });
-    const y = this.rowY(this.rows.length) + 10;
-    if (p.y > y && p.y < y + 44 && p.x > 90 && p.x < 270) {
+    const r = this.rowAt(p);
+    if (r && !r.vol) {
+      Sfx.play('tap');
+      const lang = S.lang === 'en' ? 'en' : 'fr';
+      if (r.k === 'notes') { go('notes', { back: 'settings', backArg: { back: this.backTo } }); return; }
+      if (r.k === 'save') { if (window.KS) KS.saveDialog({ keys: [SAVE_KEY], lang, save: () => Save.save(), accent: '#7dff4a' }); return; }
+      if (r.k === 'bug') { if (window.KS) KS.bug('Le Nécromancien de la Crypte', lang); return; }
+      if (r.k === 'support') { if (window.KS) KS.support(); return; }
+      if (r.k === 'lang') { S.lang = S.lang === 'fr' ? 'en' : 'fr'; Save.save(); this.enter({ back: this.backTo }); }
+      return;
+    }
+    const y = this.rowY(this.rows.length) + 8;
+    if (p.y > y && p.y < y + 40 && p.x > 90 && p.x < 270) {
       if (time - this.confirm > 3) { this.confirm = time; Sfx.play('error'); }
       else { Save.reset(); Scenes.crypt.run = null; Toast.show(t('reset_done')); goNow('splash'); }
     }
