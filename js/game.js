@@ -2934,6 +2934,9 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.7', d: ['19 octobre 2026', '19 October 2026'],
+    fr: ['Le bouton retour du téléphone ne quitte plus le jeu : il revient à l\'écran précédent, met la nuit en pause, et depuis la carte propose de revenir à l\'écran titre. Depuis l\'écran titre, il propose d\'aller au hub Keismey Studio.'],
+    en: ['The phone\'s back button no longer leaves the game: it returns to the previous screen, pauses the night, and from the map offers to go back to the title screen. From the title screen, it offers to go to the Keismey Studio hub.'] },
   { v: '1.6', d: ['17 octobre 2026', '17 October 2026'],
     fr: ['Les combats se déroulent en plein écran : plus de héros à moitié coupés contre le bord d\'entrée de l\'étage.',
       'Le flash des coups est un éclat rouge qui s\'estompe, au lieu d\'une silhouette toute rouge.',
@@ -3716,6 +3719,55 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|a
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // Accès de test (console) : window.NECRO
-window.NECRO = { get S() { return S; }, Scenes, go: goNow, Logic, D, Art, get view() { return view; }, get H() { return H; }, get BAR_Y() { return BAR_Y; }, get FLOOR() { return FLOOR; } };
+
+/* ---------- Bouton retour du téléphone (voir js/ks-back.js) ----------
+   fenêtre de l'atelier → fermée ; écran avec une flèche retour → cette flèche ; nuit → pause (un 2e retour reprend) ;
+   carte → écran titre (confirmé) ; écran titre → hub (confirmé). Bilan, intro, fin : ignoré. */
+function backAsk(q, p, y, fn) {
+  if (document.getElementById('kbk')) return;
+  const d = document.createElement('div'); d.id = 'kbk';
+  d.style.cssText = 'position:fixed;inset:0;z-index:95;display:grid;place-items:center;background:rgba(7,4,11,.72);font-family:' + FONT.replace(/"/g, "'");
+  const b = (id, bg, txt) => '<button id="' + id + '" style="flex:1;font:bold 15px ' + FONT.replace(/"/g, "'") + ';color:' + C.text + ';background:' + bg + ';border:3px solid ' + C.ink + ';border-radius:12px;padding:11px 8px">' + txt + '</button>';
+  d.innerHTML = '<div style="width:min(84vw,320px);background:' + C.panel + ';border:3px solid ' + C.violetL + ';border-radius:16px;padding:18px 16px;color:' + C.bone + ';text-align:center">' +
+    '<div style="font:bold 19px ' + FONT.replace(/"/g, "'") + ';color:' + C.text + ';margin-bottom:8px">' + q + '</div><div style="font-size:14px;color:' + C.dim + ';margin-bottom:16px;line-height:1.35">' + p + '</div>' +
+    '<div style="display:flex;gap:10px">' + b('kbkN', C.panelL, t('back_cancel')) + b('kbkY', C.violet, y) + '</div></div>';
+  document.body.appendChild(d);
+  const close = () => d.remove();
+  d.querySelector('#kbkN').onclick = () => { Sfx.play('tap'); close(); };
+  d.querySelector('#kbkY').onclick = () => { Sfx.play('tap'); close(); fn(); };
+  d.addEventListener('pointerdown', e => { if (e.target === d) close(); });
+}
+function backButtonOf(sc) {
+  for (const v of Object.values(sc)) {
+    const list = Array.isArray(v) ? v : [v];
+    for (const b of list) if (b && typeof b === 'object' && b.icon === 'back' && typeof b.on === 'function' && b.show !== false && !b.off) return b;
+  }
+  return null;
+}
+function onBack() {
+  const dlg = document.getElementById('kbk');
+  if (dlg) { dlg.remove(); return; }
+  if (document.getElementById('studio') || fade.dir === 1 || !scene) return;
+  const id = scene.id;
+  if (id === 'splash') { backAsk(t('back_hub_q'), t('back_hub_p'), t('back_hub_y'), () => window.KSBack.toHub()); return; }
+  if (id === 'crypt') {
+    if (scene.paused) { scene.paused = false; return; }
+    if (scene.phase === 'result' || scene.phase === 'lost') return;
+    scene.paused = true; scene.press = null; Toast.list = []; Hint.clear(); return;
+  }
+  if (id === 'atelier') {
+    if (scene.card) { scene.closeCard(); return; }
+    if (scene.info) { scene.info = null; return; }
+  }
+  if (id === 'map') {
+    if (scene.sel) { scene.sel = null; return; }
+    backAsk(t('back_title_q'), t('back_title_p'), t('back_title_y'), () => go('splash'));
+    return;
+  }
+  const b = backButtonOf(scene);
+  if (b) { Sfx.play('tap'); b.on(); }
+}
+if (window.KSBack) KSBack.init({ back: onBack, lang: () => (S && S.lang === 'en' ? 'en' : 'fr') });
+window.NECRO = { get S() { return S; }, get scene() { return scene && scene.id; }, Scenes, go: goNow, Logic, D, Art, get view() { return view; }, get H() { return H; }, get BAR_Y() { return BAR_Y; }, get FLOOR() { return FLOOR; } };
 Scenes.icon = { draw() { ctx.fillStyle = '#140b1e'; ctx.fillRect(0, 0, W, H); Art.glowAt(180, 320, 200, 'rgba(125,255,74,0.35)'); Art.creature(DEMO, 180, 333, 128, { still: true, t: 0.4 }); } };
 })();
