@@ -50,8 +50,12 @@
     try { history.replaceState(mark(0), ''); } catch (e) {}
   })();
 
-  function topUp() {
+  function topUp(e) {
     if (!cfg || leaving || resetting) return;
+    // seulement un vrai geste du joueur : un clic simulé par le jeu (button.click()) créerait des
+    // entrées sans action du joueur, que Chrome saute ensuite au retour… et le joueur sortirait du jeu.
+    if (e && e.isTrusted === false) return;
+    try { if (navigator.userActivation && !navigator.userActivation.isActive) return; } catch (err) {}
     idx = depth(state());
     try { while (idx < N) { idx++; history.pushState(mark(idx), ''); } } catch (e) {}
   }
