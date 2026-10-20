@@ -2943,8 +2943,8 @@ function startGame() {
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
   { v: '1.8', d: ['19 octobre 2026', '19 October 2026'],
-    fr: ['Réglages : volume de la musique et des bruitages, sauvegarde à exporter ou importer (pour changer d\'appareil), signalement de bug et soutien au studio.', 'Le navigateur est invité à garder ta sauvegarde même quand il fait du ménage.'],
-    en: ['Settings: music and sound effects volume, a save you can export or import (to switch devices), bug reports and studio support.', 'The browser is asked to keep your save even when it clears space.'] },
+    fr: ['Options : volume de la musique et des bruitages, sauvegarde à exporter ou importer (pour changer d\'appareil), signalement de bug et soutien au studio.', 'Le navigateur est invité à garder ta sauvegarde même quand il fait du ménage.'],
+    en: ['Options: music and sound effects volume, a save you can export or import (to switch devices), bug reports and studio support.', 'The browser is asked to keep your save even when it clears space.'] },
   { v: '1.7', d: ['19 octobre 2026', '19 October 2026'],
     fr: ['Le bouton retour du téléphone ne quitte plus le jeu : il revient à l\'écran précédent, met la nuit en pause, et depuis la carte propose de revenir à l\'écran titre. Depuis l\'écran titre, il propose d\'aller au hub Keismey Studio.'],
     en: ['The phone\'s back button no longer leaves the game: it returns to the previous screen, pauses the night, and from the map offers to go back to the title screen. From the title screen, it offers to go to the Keismey Studio hub.'] },

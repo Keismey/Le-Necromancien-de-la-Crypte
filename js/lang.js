@@ -2,7 +2,7 @@
 window.LANG = {
 fr: {
   title1: 'Le Nécromancien', title2: 'de la Crypte', tagline: 'Recycle les héros. Couds des abominations.',
-  play: 'Jouer', continue: 'Continuer', bestiary: 'Bestiaire', settings: 'Réglages', shop: 'Boutique', atelier: 'Atelier', map: 'Carte',
+  play: 'Jouer', continue: 'Continuer', bestiary: 'Bestiaire', settings: 'Options', shop: 'Boutique', atelier: 'Atelier', map: 'Carte',
   no_ads: 'sans pub, sans achat', ok: 'OK', sure: 'Sûr ?', resume: 'Reprendre', pause: 'Pause', quit_map: 'Quitter vers la carte', retry: 'Réessayer',
   back_title_q: 'Retour à l\'écran titre ?', back_title_p: 'Ta partie est enregistrée.', back_title_y: 'Écran titre', back_hub_q: 'Quitter la crypte ?', back_hub_p: 'Ta partie est enregistrée. Tu retrouveras les autres jeux de Keismey Studio sur le hub.', back_hub_y: 'Aller au hub', back_cancel: 'Annuler',
   rotate: 'Tourne ton téléphone ↻',
@@ -113,7 +113,7 @@ fr: {
 },
 en: {
   title1: 'The Necromancer', title2: 'of the Crypt', tagline: 'Recycle heroes. Stitch abominations.',
-  play: 'Play', continue: 'Continue', bestiary: 'Bestiary', settings: 'Settings', shop: 'Shop', atelier: 'Workshop', map: 'Map',
+  play: 'Play', continue: 'Continue', bestiary: 'Bestiary', settings: 'Options', shop: 'Shop', atelier: 'Workshop', map: 'Map',
   no_ads: 'no ads, no purchases', ok: 'OK', sure: 'Sure?', resume: 'Resume', pause: 'Paused', quit_map: 'Quit to map', retry: 'Retry',
   back_title_q: 'Back to the title screen?', back_title_p: 'Your game is saved.', back_title_y: 'Title screen', back_hub_q: 'Leave the crypt?', back_hub_p: 'Your game is saved. You\'ll find the other Keismey Studio games on the hub.', back_hub_y: 'Go to the hub', back_cancel: 'Cancel',
   rotate: 'Rotate your phone ↻',
