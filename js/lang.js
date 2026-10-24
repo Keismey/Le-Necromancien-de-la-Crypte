@@ -104,12 +104,12 @@ fr: {
   tuto_done: "Bravo ! Après chaque vague, assemble de nouvelles créatures à l'atelier avec les pièces récoltées.",
   // fin
   free_mode: 'Mode libre', end_text: "Le Titan d'Os enfonce les portes de la Cathédrale de la Lumière !",
-  credits: "Le Nécromancien de la Crypte\nConception : Keismey · Développement : Claude\nMerci d'avoir joué ! Défi sans fin débloqué sur la carte.",
+  credits: "Le Nécromancien de la Crypte\nConception et direction : Keismey · Développé avec l'aide d'outils IA\nMerci d'avoir joué ! Défi sans fin débloqué sur la carte.",
   skip: 'Passer', tap_continue: 'Touche pour continuer',
   intro_1: "Chassé de la ville par l'Ordre de la Lumière, le vieux nécromancien s'est terré sous le cimetière.",
   intro_2: "Dans sa crypte, il coud des créatures d'os et de chair volée, et leur rend la vie.",
   intro_3: 'Mais chaque nuit, des héros descendent pour en finir avec lui. Défends la crypte !',
-  credits_l: ['Un jeu Keismey Studio', 'Game design : Keismey & Claude', 'Développement : Claude Opus 5.5', 'Images et musiques : Gemini', 'Merci d’avoir veillé sur la crypte.', 'Défi sans fin débloqué sur la carte !']
+  credits_l: ['Un jeu Keismey Studio', 'Conception et direction : Keismey', 'Développé avec l’aide d’outils IA', 'Merci d’avoir veillé sur la crypte.', 'Défi sans fin débloqué sur la carte !']
 },
 en: {
   title1: 'The Necromancer', title2: 'of the Crypt', tagline: 'Recycle heroes. Stitch abominations.',
@@ -204,11 +204,11 @@ en: {
   tuto_wave: 'Your creature guards the first room. Launch the wave!', tuto_traps: 'Tap traps when heroes walk by. Tap pieces to pick them up.',
   tuto_done: 'Well done! After each wave, build new creatures in the workshop with the pieces you harvested.',
   free_mode: 'Free mode', end_text: 'The Bone Titan smashes the gates of the Cathedral of Light!',
-  credits: 'The Necromancer of the Crypt\nDesign: Keismey · Development: Claude\nThanks for playing! Endless challenge unlocked on the map.',
+  credits: 'The Necromancer of the Crypt\nDesign and direction: Keismey · Developed with the help of AI tools\nThanks for playing! Endless challenge unlocked on the map.',
   skip: 'Skip', tap_continue: 'Tap to continue',
   intro_1: 'Driven out of town by the Order of Light, the old necromancer went to ground beneath the graveyard.',
   intro_2: 'In his crypt, he stitches creatures from bone and stolen flesh, and brings them to life.',
   intro_3: 'But every night, heroes come down to finish him off. Defend the crypt!',
-  credits_l: ['A Keismey Studio game', 'Game design: Keismey & Claude', 'Development: Claude Opus 5.5', 'Art and music: Gemini', 'Thanks for watching over the crypt.', 'Endless challenge unlocked on the map!']
+  credits_l: ['A Keismey Studio game', 'Design and direction: Keismey', 'Developed with the help of AI tools', 'Thanks for watching over the crypt.', 'Endless challenge unlocked on the map!']
 }
 };
