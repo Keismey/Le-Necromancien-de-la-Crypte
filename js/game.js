@@ -3801,7 +3801,11 @@ function onBack() {
   const b = backButtonOf(scene);
   if (b) { Sfx.play('tap'); b.on(); }
 }
-if (window.KSBack) KSBack.init({ back: onBack, lang: () => (S && S.lang === 'en' ? 'en' : 'fr') });
+if (window.KSBack) KSBack.init({
+  back: onBack,
+  lang: () => (S && S.lang === 'en' ? 'en' : 'fr'),
+  title: () => !!scene && scene.id === 'splash' && fade.dir !== 1 && !document.getElementById('kbk') && !document.getElementById('studio')
+});
 window.NECRO = { get S() { return S; }, get scene() { return scene && scene.id; }, Scenes, go: goNow, Logic, D, Art, get view() { return view; }, get H() { return H; }, get BAR_Y() { return BAR_Y; }, get FLOOR() { return FLOOR; } };
 Scenes.icon = { draw() { ctx.fillStyle = '#140b1e'; ctx.fillRect(0, 0, W, H); Art.glowAt(180, 320, 200, 'rgba(125,255,74,0.35)'); Art.creature(DEMO, 180, 333, 128, { still: true, t: 0.4 }); } };
 })();

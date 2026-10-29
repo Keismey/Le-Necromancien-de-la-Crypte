@@ -5,6 +5,9 @@
      Il ferme la fenêtre ouverte, revient à l'écran précédent, met en pause ou ouvre une
      confirmation. Il renvoie 'hub' quand le joueur doit quitter le jeu pour le hub.
    - lang() renvoie 'fr' ou 'en' : la langue du hub qui s'ouvre.
+   - title() (facultatif) renvoie true quand l'écran titre est affiché : un bouton « Hub » apparaît
+     alors en haut à gauche (hubCorner: 'tr' pour le mettre à droite). C'est la seule sortie sur
+     iPhone quand le hub est installé : il n'y a ni bouton ni geste retour.
    KSBack.toHub() quitte vers le hub (par exemple après une confirmation du joueur).
 
    Le navigateur ne connaît que l'historique de l'onglet. À chaque toucher, on empile
@@ -108,6 +111,44 @@
     back(true);
   });
 
+  // bouton « Hub » de l'écran titre
+  var btn = null, btnLang = '';
+  function hubButton() {
+    var on = false;
+    try { on = !!cfg.title() && !leaving; } catch (e) {}
+    if (!btn) {
+      if (!on || !document.body) return;
+      var css = document.createElement('style');
+      css.textContent = '.ks-hub{position:fixed;z-index:2147483000;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);' +
+        'display:flex;align-items:center;gap:6px;min-width:44px;min-height:44px;margin:0;padding:0 14px 0 12px;box-sizing:border-box;' +
+        'border:1px solid rgba(255,255,255,.25);border-radius:999px;background:rgba(10,12,16,.66);color:#fff;' +
+        'font:600 15px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:0;text-transform:none;' +
+        '-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}' +
+        '.ks-hub.tr{left:auto;right:calc(env(safe-area-inset-right,0px) + 10px)}.ks-hub[hidden]{display:none}' +
+        '.ks-hub:focus-visible{outline:3px solid #fff;outline-offset:2px}.ks-hub svg{width:18px;height:18px;flex:none}';
+      document.head.appendChild(css);
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ks-hub' + (cfg.hubCorner === 'tr' ? ' tr' : '');
+      btn.innerHTML = '<svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2" width="6" height="6" rx="1.5" fill="currentColor"/>' +
+        '<rect x="10" y="2" width="6" height="6" rx="1.5" fill="currentColor"/><rect x="2" y="10" width="6" height="6" rx="1.5" fill="currentColor"/>' +
+        '<rect x="10" y="10" width="6" height="6" rx="1.5" fill="currentColor"/></svg><span>Hub</span>';
+      // le toucher ne doit pas atteindre l'écran titre (« Touche pour commencer »)
+      ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(function (t) {
+        btn.addEventListener(t, function (e) { e.stopPropagation(); });
+      });
+      btn.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); toHub(); });
+      document.body.appendChild(btn);
+    }
+    var l = cfg.lang && cfg.lang() === 'en' ? 'en' : 'fr';
+    if (l !== btnLang) {
+      btnLang = l;
+      btn.title = l === 'en' ? 'Go to the Keismey Studio hub' : 'Aller au hub de Keismey Studio';
+      btn.setAttribute('aria-label', btn.title);
+    }
+    if (btn.hidden === on) btn.hidden = !on;
+  }
+
   window.addEventListener('pagehide', function () { clearTimeout(timer); });
   window.addEventListener('pageshow', function (e) {
     if (!e.persisted) return;            // page revenue depuis le cache du navigateur
@@ -115,7 +156,10 @@
   });
 
   window.KSBack = {
-    init: function (o) { cfg = o; },
+    init: function (o) {
+      cfg = o;
+      if (o && typeof o.title === 'function') { hubButton(); setInterval(function () { if (!document.hidden) hubButton(); }, 300); }
+    },
     toHub: toHub,
     fromHub: function () { return fromHub; }
   };
