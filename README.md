@@ -13,7 +13,7 @@ Play in English: https://keismey.github.io/Le-Necromancien-de-la-Crypte/?lang=en
 - `js/lang.js` — textes français et anglais
 - `js/assets.js` — liste des images
 - `js/ks-studio.js`, `js/ks-back.js` — fichiers communs à tous les jeux du studio (ne pas les modifier ici)
-- `assets/` — images et musiques ; `icons/` — icônes de l'appli ; `og.jpg` — image d'aperçu des liens partagés
+- `assets/` — images (WebP : légères, avec transparence) et musiques ; `icons/` — icônes de l'appli ; `og.jpg` — image d'aperçu des liens partagés
 - `fonts/` — Creepster et Fredoka (licence SIL OFL)
 - `tools/` — préparation des planches d'images (non utilisé par le jeu)
 - `sw.js` — mode hors ligne ; changer `VERSION` à chaque mise en ligne

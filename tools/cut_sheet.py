@@ -8,7 +8,7 @@ Usage : python3 cut_sheet.py planche.png cle1,cle2,... [--merge 25] [--flip cle 
   distance qui donne exactement autant d'éléments que de clés.
 - Les traits de grille (lignes sombres qui traversent la planche) sont effacés.
 - Les trous fermés couleur fond (entre les côtes…) deviennent transparents.
-- Chaque élément devient assets/<cle>.png (fond transparent, 256 px max) et js/assets.js est mis à jour.
+- Chaque élément devient assets/<cle>.webp (fond transparent, 256 px max) et js/assets.js est mis à jour.
 """
 import os, json, argparse
 import numpy as np
@@ -90,10 +90,10 @@ def main():
         if key in a.flip: piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
         if key in rot: piece = piece.rotate(rot[key], expand=True, resample=Image.BICUBIC)
         piece.thumbnail((a.max, a.max), Image.LANCZOS)
-        piece.save(os.path.join(out, key + '.png'))
+        piece.save(os.path.join(out, key + '.webp'), 'WEBP', quality=90, alpha_quality=100, method=6)
         print('ok', key, piece.size)
     if a.out: return
-    lst = sorted(f[:-4] for f in os.listdir(out) if f.endswith('.png') or (f.startswith('bg_') and f.endswith('.jpg')))
+    lst = sorted(f[:-5] for f in os.listdir(out) if f.endswith('.webp') and f not in ('cover.webp', 'studio_logo.webp'))
     with open(os.path.join(ROOT, 'js', 'assets.js'), 'w') as f:
         f.write('/* Liste des images présentes dans assets/ (sans extension). Vide = dessins procéduraux. */\n')
         f.write('window.ASSET_LIST = ' + json.dumps(lst) + ';\n')

@@ -277,7 +277,7 @@ const C = {
 };
 // police d'interface : Fredoka (ronde et épaisse, licence OFL), avec repli système le temps qu'elle charge
 const FONT = 'Fredoka, "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-try { const uf = new FontFace('Fredoka', 'url(fonts/Fredoka.ttf)', { weight: '300 700', stretch: '75% 125%' }); uf.load().then(f => { document.fonts.add(f); if (Scenes.crypt) Scenes.crypt.bg = null; }).catch(() => {}); } catch (_) {}
+try { const uf = new FontFace('Fredoka', 'url(fonts/Fredoka.woff2)', { weight: '300 700', stretch: '75% 125%' }); uf.load().then(f => { document.fonts.add(f); if (Scenes.crypt) Scenes.crypt.bg = null; }).catch(() => {}); } catch (_) {}
 function font(size, bold) { return (bold === false ? '' : 'bold ') + size + 'px ' + FONT; }
 function txt(s, x, y, size, color, align, opt) {
   opt = opt || {};
@@ -813,9 +813,9 @@ const Art = (function () {
     dot(-0.08, -0.16, 0.04, '#eaffd8');
   };
 
-  // Images (assets/<clé>.png, listées dans js/assets.js) : elles remplacent les dessins procéduraux
+  // Images (assets/<clé>.webp, listées dans js/assets.js) : elles remplacent les dessins procéduraux
   const imgs = {};
-  (window.ASSET_LIST || []).forEach(k => { const im = new Image(); im.src = 'assets/' + k + (k.startsWith('bg_') ? '.jpg' : '.png'); imgs[k] = im; });
+  (window.ASSET_LIST || []).forEach(k => { const im = new Image(); im.src = 'assets/' + k + '.webp'; imgs[k] = im; });
   function img(k) { const im = imgs[k]; return im && im.complete && im.naturalWidth ? im : null; }
   // part des images déjà chargées (ou en échec), pour l'écran de démarrage
   function progress() { const l = Object.values(imgs); return l.length ? l.filter(im => im.complete).length / l.length : 1; }
@@ -2905,7 +2905,7 @@ Scenes.splash = {
 };
 // Titre du jeu : police Creepster (fonts/, licence OFL), rendu une fois dans une image puis réutilisé
 const titleFont = { ok: false };
-try { const ff = new FontFace('Creepster', 'url(fonts/Creepster-Regular.ttf)'); ff.load().then(f => { document.fonts.add(f); titleFont.ok = true; titleFont.cv = null; }).catch(() => {}); } catch (_) {}
+try { const ff = new FontFace('Creepster', 'url(fonts/Creepster-Regular.woff2)'); ff.load().then(f => { document.fonts.add(f); titleFont.ok = true; titleFont.cv = null; }).catch(() => {}); } catch (_) {}
 function drawTitle(cx, y) {
   const key = S.lang + titleFont.ok;
   if (!titleFont.cv || titleFont.key !== key) {
