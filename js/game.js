@@ -2942,6 +2942,9 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.9', d: ['29 octobre 2026', '29 October 2026'],
+    fr: ['Le jeu se charge bien plus vite : images trois fois plus légères.', 'Options : bouton « Retour au hub », et le même ordre que dans les autres jeux du studio.'],
+    en: ['The game loads much faster: pictures are three times lighter.', 'Options: a “Back to the hub” button, in the same order as the studio’s other games.'] },
   { v: '1.8', d: ['19 octobre 2026', '19 October 2026'],
     fr: ['Options : volume de la musique et des bruitages, sauvegarde à exporter ou importer (pour changer d\'appareil), signalement de bug et soutien au studio.', 'Le navigateur est invité à garder ta sauvegarde même quand il fait du ménage.'],
     en: ['Options: music and sound effects volume, a save you can export or import (to switch devices), bug reports and studio support.', 'The browser is asked to keep your save even when it clears space.'] },
@@ -3462,8 +3465,8 @@ Scenes.settings = {
     this.backTo = (arg && arg.back) || 'map'; this.confirm = -1e9; this.drag = null;
     this.back = UI.btn({ x: 4, y: 4, w: 46, h: 40, icon: 'back', style: 'dark', on: () => go(this.backTo, { resume: true }) });
     this.rows = [
-      { k: 'lang', icon: 'flag' }, { k: 'music', icon: 'music', vol: 'mv' }, { k: 'sound', icon: 'sound', vol: 'sv' },
-      { k: 'notes', icon: 'book' }, { k: 'save', icon: 'check' }, { k: 'bug', icon: 'skull' }, { k: 'support', icon: 'heart' }
+      { k: 'music', icon: 'music', vol: 'mv' }, { k: 'sound', icon: 'sound', vol: 'sv' }, { k: 'lang', icon: 'flag' },
+      { k: 'save', icon: 'check' }, { k: 'notes', icon: 'book' }, { k: 'bug', icon: 'skull' }, { k: 'support', icon: 'heart' }, { k: 'hub', icon: 'map' }
     ];
   },
   update() {},
@@ -3521,6 +3524,7 @@ Scenes.settings = {
       if (r.k === 'save') { if (window.KS) KS.saveDialog({ keys: [SAVE_KEY], lang, save: () => Save.save(), accent: '#7dff4a' }); return; }
       if (r.k === 'bug') { if (window.KS) KS.bug('Le Nécromancien de la Crypte', lang); return; }
       if (r.k === 'support') { if (window.KS) KS.support(); return; }
+      if (r.k === 'hub') { Save.save(); if (window.KSBack) KSBack.toHub(); return; }
       if (r.k === 'lang') { S.lang = S.lang === 'fr' ? 'en' : 'fr'; Save.save(); this.enter({ back: this.backTo }); }
       return;
     }

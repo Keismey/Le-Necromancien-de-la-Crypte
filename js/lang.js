@@ -92,7 +92,7 @@ fr: {
   // bestiaire
   tab_creatures: 'Créatures', tab_grimoire: 'Grimoire', tab_heroes: 'Héros', made_n: '{n} créées', no_creature_yet: 'Aucune créature encore.', no_creature_go: 'Coud ta première créature à l’atelier.',
   // réglages
-  set_lang: 'Langue', setd_lang: 'Français / English', set_sound: 'Bruitages', set_music: 'Musique', set_save: 'Sauvegarde', setd_save: 'Exporter ou importer (changer d’appareil)', set_bug: 'Signaler un bug', setd_bug: 'Formulaire du hub Keismey Studio', set_support: 'Soutenir le studio', setd_support: 'Un petit don sur Ko-fi',
+  set_lang: 'Langue', setd_lang: 'Français / English', set_sound: 'Bruitages', set_music: 'Musique', set_save: 'Sauvegarde', setd_save: 'Exporter ou importer (changer d’appareil)', set_bug: 'Signaler un bug', setd_bug: 'Formulaire du hub Keismey Studio', set_support: 'Soutenir le studio', setd_support: 'Un petit don sur Ko-fi', set_hub: 'Retour au hub', setd_hub: 'Les autres jeux de Keismey Studio',
   set_notes: 'Notes de mise à jour', notes_title: 'Notes de mise à jour', notes_version: 'Version', tap_notes: 'Notes de mise à jour',
   reset_save: 'Effacer la sauvegarde', reset_done: 'Sauvegarde effacée.',
   // tutoriel
@@ -194,7 +194,7 @@ en: {
   shop_grim_2: 'Grimoire III', shopd_grim_2: 'Reveals a secret recipe.', shop_grim_3: 'Grimoire IV', shopd_grim_3: 'Reveals a secret recipe.',
   shop_grim_4: 'Grimoire V', shopd_grim_4: 'Reveals a secret recipe.',
   tab_creatures: 'Creatures', tab_grimoire: 'Grimoire', tab_heroes: 'Heroes', made_n: '{n} made', no_creature_yet: 'No creatures yet.', no_creature_go: 'Sew your first creature in the workshop.',
-  set_lang: 'Language', setd_lang: 'Français / English', set_sound: 'Sound effects', set_music: 'Music', set_save: 'Save', setd_save: 'Export or import (switch devices)', set_bug: 'Report a bug', setd_bug: 'Keismey Studio hub form', set_support: 'Support the studio', setd_support: 'A small tip on Ko-fi',
+  set_lang: 'Language', setd_lang: 'Français / English', set_sound: 'Sound effects', set_music: 'Music', set_save: 'Save', setd_save: 'Export or import (switch devices)', set_bug: 'Report a bug', setd_bug: 'Keismey Studio hub form', set_support: 'Support the studio', setd_support: 'A small tip on Ko-fi', set_hub: 'Back to the hub', setd_hub: 'The other Keismey Studio games',
   set_notes: 'Patch notes', notes_title: 'Patch notes', notes_version: 'Version', tap_notes: 'Patch notes',
   reset_save: 'Erase save', reset_done: 'Save erased.',
   tuto_intro: 'Heroes are invading your crypt! A peasant comes in…', tuto_trap: 'Tap the trap when the hero walks over it!',
