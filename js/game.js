@@ -505,6 +505,9 @@ const Hint = {
 };
 
 // ============================== FX (particules, textes flottants, secousse) ==============================
+// réglage « réduire les animations » de l'appareil : pas de secousse d'écran ni d'éclair plein écran (lu à chaque fois, suit un changement en cours de partie)
+const RM = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const reducedMotion = () => !!(RM && RM.matches);
 const FX = {
   parts: [], texts: [], bolts: [], debris: [], wisps: [], shakeT: 0, shakeA: 0, flash: 0, stop: 0,
   // arrêt sur image très court sur les gros coups (donne du poids à l'impact)
@@ -537,7 +540,7 @@ const FX = {
     for (let i = 0; i <= n; i++) { const k = i / n; pts.push([lerp(x1, x2, k) + (i && i < n ? rnd(-14, 14) : 0), lerp(y1, y2, k) + (i && i < n ? rnd(-6, 6) : 0)]); }
     this.bolts.push({ pts, col: col || C.toxic, t: 0, life: life || 0.25 });
   },
-  shake(a, t) { this.shakeA = Math.max(this.shakeA, a); this.shakeT = Math.max(this.shakeT, t); },
+  shake(a, t) { if (reducedMotion()) return; this.shakeA = Math.max(this.shakeA, a); this.shakeT = Math.max(this.shakeT, t); },
   update(dt) {
     this.parts.forEach(p => { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; });
     this.parts = this.parts.filter(p => p.t < p.life);
@@ -1684,7 +1687,7 @@ Scenes.atelier = {
     }
     if (this.wake) {
       const w = this.wake; w.t += dt;
-      if (w.t < 1.2 && Math.random() < dt * 14) { FX.bolt(rnd(60, 300), 96, rnd(140, 220), rnd(170, 330), C.toxic); FX.flash = 0.6; }
+      if (w.t < 1.2 && !reducedMotion() && Math.random() < dt * 14) { FX.bolt(rnd(60, 300), 96, rnd(140, 220), rnd(170, 330), C.toxic); FX.flash = 0.6; }
       if (w.t >= 1.2 && !w.done) {
         w.done = true; FX.shake(8, 0.5); Sfx.play('roar');
         FX.spark(180, 250, C.toxic, 40, 200); FX.spark(180, 250, C.bone, 20, 160);
@@ -2970,6 +2973,9 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.10', d: ['31 octobre 2026', '31 October 2026'],
+    fr: ['Sur téléphone, le zoom à deux doigts fonctionne à nouveau.', 'Appli installée : le jeu ne passe plus sous l\'encoche ni sous la barre du bas.', 'Boutons et onglets plus faciles à toucher.', 'Si ton appareil demande de réduire les animations, l\'écran ne tremble plus et ne flashe plus.', 'Mode hors ligne plus fiable quand le serveur a un souci.'],
+    en: ['On phones, pinch-to-zoom works again.', 'Installed app: the game no longer goes under the notch or the bottom bar.', 'Buttons and tabs are easier to tap.', 'If your device asks for reduced motion, the screen no longer shakes or flashes.', 'Offline mode is more reliable when the server has a problem.'] },
   { v: '1.9', d: ['29 octobre 2026', '29 October 2026'],
     fr: ['Le jeu se charge bien plus vite : images trois fois plus légères.', 'Options : bouton « Retour au hub », et le même ordre que dans les autres jeux du studio.'],
     en: ['The game loads much faster: pictures are three times lighter.', 'Options: a “Back to the hub” button, in the same order as the studio’s other games.'] },
@@ -3451,7 +3457,7 @@ Scenes.grinder = {
     const a = this.anim;
     if (a) {
       // le broyeur surgit par-dessus la barre d'actions
-      const pop = ease(clamp(a.t / 0.25, 0, 1)), sh = a.crunched && a.t < a.end + 0.4 ? rnd(-3, 3) : 0;
+      const pop = ease(clamp(a.t / 0.25, 0, 1)), sh = a.crunched && a.t < a.end + 0.4 && !reducedMotion() ? rnd(-3, 3) : 0;
       ctx.fillStyle = 'rgba(13,7,22,' + 0.96 * pop + ')'; ctx.fillRect(0, G.y + G.h + 2, W, H - G.y - G.h);
       Art.glowAt(W / 2, GR_MILL.y, 70 * pop, a.crunched ? 'rgba(125,255,74,0.45)' : 'rgba(195,58,74,0.35)');
       Art.icon('bin', W / 2 + sh, GR_MILL.y + sh, 84 * pop);
@@ -3748,7 +3754,7 @@ function render() {
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
   if (scene) scene.draw();
   FX.draw(); if (!(scene && scene.calm && scene.calm())) { Hint.draw(); Toast.draw(); } // pas de message par-dessus la pause ou les résultats
-  if (FX.flash > 0) { ctx.fillStyle = 'rgba(220,255,200,' + (FX.flash * 0.5) + ')'; ctx.fillRect(0, 0, W, H); }
+  if (FX.flash > 0 && !reducedMotion()) { ctx.fillStyle = 'rgba(220,255,200,' + (FX.flash * 0.5) + ')'; ctx.fillRect(0, 0, W, H); }
   if (fade.t > 0) { ctx.fillStyle = 'rgba(7,4,11,' + fade.t + ')'; ctx.fillRect(0, 0, W, H); }
   ctx.restore();
   // écrans plus hauts/larges que 9:16 : on prolonge les bords de la scène au lieu de bandes noires
