@@ -15,15 +15,19 @@ let time = 0;            // temps global (s)
 let scene = null;
 const Scenes = {};
 
+let lastWin = null, lastKey = '';
 function resize() {
-  // pendant un zoom à deux doigts, Safari change innerWidth : on garde la mise en page d'avant
-  if (window.visualViewport && visualViewport.scale > 1.01) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  const iw = window.innerWidth, ih = window.innerHeight;
-  cv.width = Math.round(iw * dpr); cv.height = Math.round(ih * dpr);
-  cv.style.width = iw + 'px'; cv.style.height = ih + 'px';
+  let iw = window.innerWidth, ih = window.innerHeight;
+  // pendant un zoom à deux doigts, Safari change innerWidth : on garde la taille d'avant (un changement de scène recalcule quand même H)
+  if (window.visualViewport && visualViewport.scale > 1.01 && lastWin) [iw, ih] = lastWin; else lastWin = [iw, ih];
   const want = scene && scene.tall ? Math.max(640, Math.min(760, Math.round(ih / iw * W))) : 640;
   if (want !== H) { H = want; if (scene && scene.relayout) scene.relayout(); }
+  const key = [iw, ih, dpr, H].join();
+  if (key === lastKey) return; // rien n'a changé : on ne réalloue pas le canvas
+  lastKey = key;
+  cv.width = Math.round(iw * dpr); cv.height = Math.round(ih * dpr);
+  cv.style.width = iw + 'px'; cv.style.height = ih + 'px';
   const s = Math.min(iw / W, ih / H);
   view = { s, ox: (iw - W * s) / 2, oy: (ih - H * s) / 2, dpr };
 }
@@ -68,7 +72,14 @@ cv.addEventListener('pointermove', e => {
 function endPtr(e, cancel) {
   if (e.pointerId !== ptr.id) return;
   const p = toLogical(e); ptr.id = null; ptr.down = false;
-  if (scene && scene.up) scene.up(p, cancel);
+  if (!scene) return;
+  // geste annulé (2e doigt pour zoomer, appel entrant…) : on abandonne sans rien valider
+  if (cancel) {
+    UI.pressed = null;
+    if (scene.cancel) scene.cancel(); else ['press', 'drag', 'dragY'].forEach(k => { if (k in scene) scene[k] = null; });
+    return;
+  }
+  if (scene.up) scene.up(p);
 }
 cv.addEventListener('pointerup', e => endPtr(e, false));
 cv.addEventListener('pointercancel', e => endPtr(e, true));
@@ -1588,6 +1599,12 @@ Scenes.atelier = {
       else if (i === S.creatures.length && i < D.maxCreatures) { this.select(null); Sfx.play('tap'); }
     }
   },
+  // geste annulé : pas de couture, d'injection ni de réveil ; une pièce sortie de la table y retourne
+  cancel() {
+    this.sew = null; this.vial = null; this.leverDrag = false; this.press = null;
+    const d = this.drag; this.drag = null;
+    if (d && d.from === 'slot') this.parts[d.fromSlot] = d.p;
+  },
   drop(p) {
     const d = this.drag; this.drag = null;
     if (dist(p.x, p.y - 26, BIN.x, BIN.y) < BIN.r + 14 && !this.titan && S.tuto >= 99) { this.grind(d.p); return; }
@@ -2488,6 +2505,7 @@ Scenes.crypt = {
     }
     this.press = null;
   },
+  cancel() { this.drag = null; this.press = null; }, // la créature reste à son poste
   cycleTrap(i) {
     const owned = Object.keys(D.traps).filter(k => S.owned.traps[k]);
     if (owned.length < 2) { Toast.show(t('more_traps')); return; }
