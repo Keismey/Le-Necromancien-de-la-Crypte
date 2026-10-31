@@ -1687,7 +1687,7 @@ Scenes.atelier = {
     }
     if (this.wake) {
       const w = this.wake; w.t += dt;
-      if (w.t < 1.2 && Math.random() < dt * 14) { FX.bolt(rnd(60, 300), 96, rnd(140, 220), rnd(170, 330), C.toxic); FX.flash = 0.6; }
+      if (w.t < 1.2 && !reducedMotion() && Math.random() < dt * 14) { FX.bolt(rnd(60, 300), 96, rnd(140, 220), rnd(170, 330), C.toxic); FX.flash = 0.6; }
       if (w.t >= 1.2 && !w.done) {
         w.done = true; FX.shake(8, 0.5); Sfx.play('roar');
         FX.spark(180, 250, C.toxic, 40, 200); FX.spark(180, 250, C.bone, 20, 160);
