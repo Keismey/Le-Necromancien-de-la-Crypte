@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Le Nécromancien de la Crypte</title>
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Keismey Studio">
@@ -27,10 +27,14 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
-  :root { color-scheme: dark; }
+  /* zones sûres (encoche, barre d'accueil) : lues par resize() dans js/game.js */
+  :root { color-scheme: dark; --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px); --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px); }
   html, body { margin: 0; padding: 0; height: 100%; background: #07040b; overflow: hidden; }
-  body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
-  canvas { display: block; touch-action: none; }
+  /* pinch-zoom : le zoom à deux doigts reste possible (accessibilité), le glissé à un doigt va au jeu ; repli sur none si inconnu */
+  body { touch-action: none; touch-action: pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+  canvas { display: block; touch-action: none; touch-action: pinch-zoom; }
+  /* sans maximum-scale, iOS zoome sur un champ de moins de 16 px (codes de sauvegarde de ks-studio.js) */
+  @media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
   /* Logo Keismey Studio avant l'écran titre (comme les autres jeux du studio) */
   #studio { position: fixed; inset: 0; background: #000; display: grid; place-items: center; z-index: 90; transition: opacity .6s; }
   #studio img { width: min(56%, 230px); opacity: 0; animation: fin 1s ease .15s forwards; }
