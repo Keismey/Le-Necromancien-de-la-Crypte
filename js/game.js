@@ -16,6 +16,8 @@ let scene = null;
 const Scenes = {};
 
 function resize() {
+  // pendant un zoom à deux doigts, Safari change innerWidth : on garde la mise en page d'avant
+  if (window.visualViewport && visualViewport.scale > 1.01) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   const iw = window.innerWidth, ih = window.innerHeight;
   cv.width = Math.round(iw * dpr); cv.height = Math.round(ih * dpr);
@@ -26,6 +28,7 @@ function resize() {
   view = { s, ox: (iw - W * s) / 2, oy: (ih - H * s) / 2, dpr };
 }
 window.addEventListener('resize', resize);
+if (window.visualViewport) visualViewport.addEventListener('resize', resize); // fin du zoom à deux doigts
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
