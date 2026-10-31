@@ -1535,8 +1535,7 @@ Scenes.atelier = {
     const v = this.vialAt(p);
     if (v) { if (S.souls < this.doseCost(v)) { Toast.show(t('need_souls', { n: this.doseCost(v) })); Sfx.play('error'); return; } this.vial = { type: v, x: p.x, y: p.y, target: null, fill: 0, ax: p.x, ay: p.y }; Sfx.play('vial'); return; }
     // onglets
-    // onglets dessinés sur 22 px : toucher élargi vers le haut
-    if (p.y >= DRAWER_Y - 8 && p.y < DRAWER_Y + 28 && !this.titan) { const i = Math.floor(p.x / (W / TABS.length)); this.tab = TABS[clamp(i, 0, TABS.length - 1)]; this.scroll = 0; Sfx.play('tap'); return; }
+    if (p.y >= DRAWER_Y && p.y < DRAWER_Y + 28 && !this.titan) { const i = Math.floor(p.x / (W / TABS.length)); this.tab = TABS[clamp(i, 0, TABS.length - 1)]; this.scroll = 0; Sfx.play('tap'); return; }
     // tiroir
     if (p.y >= DRAWER_Y + 28) { const c = this.cellAt(p); this.press = { kind: 'inv', piece: c, x: p.x, y: p.y, scroll0: this.scroll }; return; }
   },
@@ -3344,8 +3343,8 @@ Scenes.bestiary = {
   maxScroll() { return Math.max(0, this.rows() * this.rowH() + 100 - H + 10); },
   down(p) {
     if (UI.down([this.back], p)) return;
-    // onglets de 34 px, toucher sur 47
-    if (p.y >= 47 && p.y < 94) { this.tab = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.scroll = 0; Sfx.play('tap'); return; }
+    // onglets de 34 px, toucher sur 45 (la liste commence à 92)
+    if (p.y >= 47 && p.y < 92) { this.tab = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.scroll = 0; Sfx.play('tap'); return; }
     this.press = { y: p.y, s0: this.scroll };
   },
   move(p) { if (this.press) this.scroll = clamp(this.press.s0 - (p.y - this.press.y), 0, this.maxScroll()); },
