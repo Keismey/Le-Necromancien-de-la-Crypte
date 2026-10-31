@@ -27,7 +27,8 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
-  :root { color-scheme: dark; }
+  /* zones sûres (encoche, barre d'accueil) : lues par resize() dans js/game.js */
+  :root { color-scheme: dark; --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px); --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px); }
   html, body { margin: 0; padding: 0; height: 100%; background: #07040b; overflow: hidden; }
   /* pinch-zoom : le zoom à deux doigts reste possible (accessibilité), le glissé à un doigt va au jeu ; repli sur none si inconnu */
   body { touch-action: none; touch-action: pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
