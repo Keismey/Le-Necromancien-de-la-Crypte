@@ -2973,6 +2973,9 @@ function startGame() {
 
 // ============================== Notes de mise à jour (la plus récente en premier) ==============================
 const PN = [
+  { v: '1.10', d: ['31 octobre 2026', '31 October 2026'],
+    fr: ['Sur téléphone, le zoom à deux doigts fonctionne à nouveau.', 'Appli installée : le jeu ne passe plus sous l\'encoche ni sous la barre du bas.', 'Boutons et onglets plus faciles à toucher.', 'Si ton appareil demande de réduire les animations, l\'écran ne tremble plus et ne flashe plus.', 'Mode hors ligne plus fiable quand le serveur a un souci.'],
+    en: ['On phones, pinch-to-zoom works again.', 'Installed app: the game no longer goes under the notch or the bottom bar.', 'Buttons and tabs are easier to tap.', 'If your device asks for reduced motion, the screen no longer shakes or flashes.', 'Offline mode is more reliable when the server has a problem.'] },
   { v: '1.9', d: ['29 octobre 2026', '29 October 2026'],
     fr: ['Le jeu se charge bien plus vite : images trois fois plus légères.', 'Options : bouton « Retour au hub », et le même ordre que dans les autres jeux du studio.'],
     en: ['The game loads much faster: pictures are three times lighter.', 'Options: a “Back to the hub” button, in the same order as the studio’s other games.'] },
