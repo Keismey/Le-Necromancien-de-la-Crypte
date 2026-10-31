@@ -403,7 +403,11 @@ function threeV(im, x, y, w, h, cap) {
 const UI = {
   pressed: null,
   btn(o) { return Object.assign({ x: 0, y: 0, w: 120, h: 46, label: '', icon: null, on: null, show: true, off: false, style: 'main', pulse: false, size: 16 }, o); },
-  hit(b, p) { return b.show && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h; },
+  // zone de toucher d'au moins 44 x 44 (centrée), même si le bouton est dessiné plus petit
+  hit(b, p) {
+    const mx = Math.max(0, (44 - b.w) / 2), my = Math.max(0, (44 - b.h) / 2);
+    return b.show && p.x >= b.x - mx && p.x <= b.x + b.w + mx && p.y >= b.y - my && p.y <= b.y + b.h + my;
+  },
   down(list, p) {
     for (let i = list.length - 1; i >= 0; i--) {
       const b = list[i];
@@ -1531,7 +1535,8 @@ Scenes.atelier = {
     const v = this.vialAt(p);
     if (v) { if (S.souls < this.doseCost(v)) { Toast.show(t('need_souls', { n: this.doseCost(v) })); Sfx.play('error'); return; } this.vial = { type: v, x: p.x, y: p.y, target: null, fill: 0, ax: p.x, ay: p.y }; Sfx.play('vial'); return; }
     // onglets
-    if (p.y >= DRAWER_Y && p.y < DRAWER_Y + 28 && !this.titan) { const i = Math.floor(p.x / (W / TABS.length)); this.tab = TABS[clamp(i, 0, TABS.length - 1)]; this.scroll = 0; Sfx.play('tap'); return; }
+    // onglets dessinés sur 22 px : toucher élargi vers le haut
+    if (p.y >= DRAWER_Y - 8 && p.y < DRAWER_Y + 28 && !this.titan) { const i = Math.floor(p.x / (W / TABS.length)); this.tab = TABS[clamp(i, 0, TABS.length - 1)]; this.scroll = 0; Sfx.play('tap'); return; }
     // tiroir
     if (p.y >= DRAWER_Y + 28) { const c = this.cellAt(p); this.press = { kind: 'inv', piece: c, x: p.x, y: p.y, scroll0: this.scroll }; return; }
   },
@@ -3339,7 +3344,8 @@ Scenes.bestiary = {
   maxScroll() { return Math.max(0, this.rows() * this.rowH() + 100 - H + 10); },
   down(p) {
     if (UI.down([this.back], p)) return;
-    if (p.y > 50 && p.y < 88) { this.tab = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.scroll = 0; Sfx.play('tap'); return; }
+    // onglets de 34 px, toucher sur 47
+    if (p.y >= 47 && p.y < 94) { this.tab = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.scroll = 0; Sfx.play('tap'); return; }
     this.press = { y: p.y, s0: this.scroll };
   },
   move(p) { if (this.press) this.scroll = clamp(this.press.s0 - (p.y - this.press.y), 0, this.maxScroll()); },
@@ -3460,8 +3466,9 @@ Scenes.grinder = {
   down(p) {
     if (this.anim) return;
     if (UI.down(this.btns, p)) return;
-    if (p.y >= 52 && p.y < 84) { const i = clamp(Math.floor((p.x - 8) / ((W - 16) / TABS.length)), 0, TABS.length - 1); this.slot = TABS[i]; this.scroll = 0; Sfx.play('tap'); return; }
-    if (p.y >= 90 && p.y < 124) { const r = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.rar[r] = !this.rar[r]; this.scroll = 0; Sfx.play('tap'); return; }
+    // filtres dessinés sur 32-34 px : zones de toucher jointives, de la barre de titre à la grille
+    if (p.y >= 46 && p.y < 87) { const i = clamp(Math.floor((p.x - 8) / ((W - 16) / TABS.length)), 0, TABS.length - 1); this.slot = TABS[i]; this.scroll = 0; Sfx.play('tap'); return; }
+    if (p.y >= 87 && p.y < 130) { const r = clamp(Math.floor((p.x - 8) / 116), 0, 2); this.rar[r] = !this.rar[r]; this.scroll = 0; Sfx.play('tap'); return; }
     const G = this.GRID;
     if (p.y >= G.y && p.y < G.y + G.h) this.press = { x: p.x, y: p.y, s0: this.scroll, moved: false };
   },
