@@ -21,15 +21,18 @@ function resize() {
   let iw = window.innerWidth, ih = window.innerHeight;
   // pendant un zoom à deux doigts, Safari change innerWidth : on garde la taille d'avant (un changement de scène recalcule quand même H)
   if (window.visualViewport && visualViewport.scale > 1.01 && lastWin) [iw, ih] = lastWin; else lastWin = [iw, ih];
-  const want = scene && scene.tall ? Math.max(640, Math.min(760, Math.round(ih / iw * W))) : 640;
+  // le jeu se place hors de l'encoche et de la barre d'accueil ; les bandes de bord (render) remplissent le reste
+  const cs = getComputedStyle(document.documentElement), sa = k => parseFloat(cs.getPropertyValue('--sa-' + k)) || 0;
+  const st = sa('t'), sr = sa('r'), sb = sa('b'), sl = sa('l'), aw = Math.max(1, iw - sl - sr), ah = Math.max(1, ih - st - sb);
+  const want = scene && scene.tall ? Math.max(640, Math.min(760, Math.round(ah / aw * W))) : 640;
   if (want !== H) { H = want; if (scene && scene.relayout) scene.relayout(); }
-  const key = [iw, ih, dpr, H].join();
+  const key = [iw, ih, dpr, H, st, sr, sb, sl].join();
   if (key === lastKey) return; // rien n'a changé : on ne réalloue pas le canvas
   lastKey = key;
   cv.width = Math.round(iw * dpr); cv.height = Math.round(ih * dpr);
   cv.style.width = iw + 'px'; cv.style.height = ih + 'px';
-  const s = Math.min(iw / W, ih / H);
-  view = { s, ox: (iw - W * s) / 2, oy: (ih - H * s) / 2, dpr };
+  const s = Math.min(aw / W, ah / H);
+  view = { s, ox: sl + (aw - W * s) / 2, oy: st + (ah - H * s) / 2, dpr };
 }
 window.addEventListener('resize', resize);
 if (window.visualViewport) visualViewport.addEventListener('resize', resize); // fin du zoom à deux doigts
